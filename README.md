@@ -184,6 +184,7 @@ Every setting is optional. These are the defaults:
     "collision_speed": 1.0,
     "bounce_speed": 0.1,
     "contact_distance": 0.02,
+    "contact_cache": false,
     "draw_distance": 0.0,
     "max_updates": 1000,
     "floor": -100.0,
@@ -203,6 +204,7 @@ Every setting is optional. These are the defaults:
 | `collision_speed` | Slowest impact in metres per second that calls `A3D_OnCollided`. |
 | `bounce_speed` | Slowest impact in metres per second that bounces. |
 | `contact_distance` | Distance in metres at which two bodies start to keep a contact. |
+| `contact_cache` | Whether two bodies that barely moved keep the contacts of the last step instead of finding them again. It saves time on piles of resting bodies, but a body that rolls slower than about 1 mm a step rolls on a stale contact, which keeps it rolling and sinks it into what it rolls on. |
 | `draw_distance` | Draw distance of the objects the component creates. `0.0` takes the default of the game. |
 | `max_updates` | Most updates of the objects players see sent in a second. Every player acknowledges each one, and open.mp allows 3000 acknowledgements a second by default. |
 | `floor` | Height under which a falling object is stopped. |

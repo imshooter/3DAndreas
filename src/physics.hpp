@@ -285,6 +285,7 @@ struct Settings {
 	float collisionSpeed = 1.0f;
 	float bounceSpeed = 0.1f;
 	float contactDistance = 0.02f;
+	bool contactCache = false;
 	float drawDistance = 0.0f;
 	float floor = -100.0f;
 	float maxUpdates = 1000.0f;

@@ -442,6 +442,7 @@ void startWorld(int maxBodies) {
 	JPH::PhysicsSettings settings;
 	settings.mMinVelocityForRestitution = s.settings.bounceSpeed;
 	settings.mSpeculativeContactDistance = s.settings.contactDistance;
+	settings.mUseBodyPairContactCache = s.settings.contactCache;
 	s.system->SetPhysicsSettings(settings);
 	s.system->SetCombineRestitution(multiplyBounce);
 }

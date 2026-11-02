@@ -64,6 +64,9 @@ public:
 		defaultNumber(config, defaults, "3dandreas.collision_speed", 1.0f);
 		defaultNumber(config, defaults, "3dandreas.bounce_speed", 0.1f);
 		defaultNumber(config, defaults, "3dandreas.contact_distance", 0.02f);
+		if (defaults || config.getType("3dandreas.contact_cache") == ConfigOptionType_None) {
+			config.setBool("3dandreas.contact_cache", false);
+		}
 		defaultNumber(config, defaults, "3dandreas.draw_distance", 0.0f);
 		defaultNumber(config, defaults, "3dandreas.floor", -100.0f);
 		defaultNumber(config, defaults, "3dandreas.max_updates", 1000.0f);
@@ -100,6 +103,8 @@ public:
 		s.settings.collisionSpeed = readNumber(config, "3dandreas.collision_speed", 1.0f);
 		s.settings.bounceSpeed = std::max(readNumber(config, "3dandreas.bounce_speed", 0.1f), 0.0f);
 		s.settings.contactDistance = std::max(readNumber(config, "3dandreas.contact_distance", 0.02f), 0.0005f);
+		bool* contactCache = config.getBool("3dandreas.contact_cache");
+		s.settings.contactCache = contactCache != nullptr && *contactCache;
 		s.settings.drawDistance = readNumber(config, "3dandreas.draw_distance", 0.0f);
 		s.settings.floor = readNumber(config, "3dandreas.floor", -100.0f);
 		s.settings.maxUpdates = std::max(readNumber(config, "3dandreas.max_updates", 1000.0f), 10.0f);
