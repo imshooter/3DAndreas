@@ -2073,9 +2073,21 @@ forward A3D_OnRouteAdvanced(playerid, Route:routeid, Float:remaining, A3D_TURN:t
  */
 
 #if defined _streamer_included
+    /**
+     * Moves the dynamic object of a body for the component. The streamer starts
+     * a move from the position it stored last, which trails an object that is
+     * still moving, so the position is read first to bring it up to date.
+     */
     forward @A3D_MoveDynamicObject(objectid, Float:x, Float:y, Float:z, Float:speed, Float:rx, Float:ry, Float:rz);
     public @A3D_MoveDynamicObject(objectid, Float:x, Float:y, Float:z, Float:speed, Float:rx, Float:ry, Float:rz) {
         if (speed > 0.0) {
+            new
+                Float:atX,
+                Float:atY,
+                Float:atZ
+            ;
+
+            GetDynamicObjectPos(objectid, atX, atY, atZ);
             MoveDynamicObject(objectid, x, y, z, speed, rx, ry, rz);
 
             return 1;
