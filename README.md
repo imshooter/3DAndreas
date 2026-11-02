@@ -246,6 +246,10 @@ phydb "C:\Games\GTA San Andreas" world.db
 navbuild world.db navmesh.db --threads 4
 ```
 
+## Other components
+
+Other open.mp components can check lines of sight, cast rays and find the ground in C++ through [`include/3DAndreas.hpp`](include/3DAndreas.hpp), with `components->queryComponent<A3D::IComponent3DAndreas>()`. The [Other components](https://github.com/imshooter/3DAndreas/wiki/Other-Components) page of the wiki tells more.
+
 ## Building
 
 Windows with Visual Studio 2022 or its Build Tools, and CMake 3.19 or later. CMake fetches the open.mp SDK, the Pawn headers, Jolt Physics, and Recast and Detour.

@@ -1,5 +1,7 @@
 #include "physics.hpp"
 
+#include "../include/3DAndreas.hpp"
+
 #include <chrono>
 
 using namespace physics;
@@ -33,7 +35,7 @@ double since(std::chrono::steady_clock::time_point start) {
 
 }
 
-class PhysicsComponent final : public IComponent, public PawnEventHandler, public CoreEventHandler, public PlayerConnectEventHandler, public PoolEventHandler<IVehicle>, public PoolEventHandler<IActor> {
+class PhysicsComponent final : public A3D::IComponent3DAndreas, public PawnEventHandler, public CoreEventHandler, public PlayerConnectEventHandler, public PoolEventHandler<IVehicle>, public PoolEventHandler<IActor> {
 public:
 	PROVIDE_UID(0x7a3c91e45d2b8f16);
 
@@ -209,6 +211,35 @@ public:
 			s.pawn->getEventDispatcher().removeEventHandler(this);
 			s.pawn = nullptr;
 		}
+	}
+
+	bool isLineOfSight(Vector3 from, Vector3 to, int world, uint32_t flags) override {
+		if (state().system == nullptr) {
+			return true;
+		}
+		return !blocked(from, to, world, flags);
+	}
+
+	bool castRay(Vector3 from, Vector3 to, int world, uint32_t flags, A3D::RayHit& hit) override {
+		QueryHit found;
+		if (state().system == nullptr || !physics::castRay(from, to, world, flags, true, found)) {
+			return false;
+		}
+		hit.point = toPoint(found.point);
+		hit.normal = Vector3(found.normal.GetX(), found.normal.GetY(), found.normal.GetZ());
+		hit.type = int(found.type);
+		hit.id = found.id;
+		hit.material = found.material;
+		return true;
+	}
+
+	bool findGround(Vector3 point, float depth, int world, uint32_t flags, float& z) override {
+		QueryHit found;
+		if (state().system == nullptr || depth <= 0.0f || !physics::castRay(point, Vector3(point.x, point.y, point.z - depth), world, flags, false, found)) {
+			return false;
+		}
+		z = float(found.point.GetZ());
+		return true;
 	}
 
 	void reset() override {
