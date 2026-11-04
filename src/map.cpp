@@ -15,21 +15,17 @@ const Model* modelOf(int modelid) {
 	return found == s.models.end() ? nullptr : &found->second;
 }
 
-bool nearPlacement(uint32_t index, int modelid, Vector3 centre, float radius) {
+bool nearPlacement(uint32_t index, int modelid, Vector3 centre, float radius, int interior) {
 	State& s = state();
 	const Placement& placement = s.placements[index];
 	if (s.placementBodies[index].IsInvalid() || (modelid != -1 && placement.modelid != modelid)) {
 		return false;
 	}
+	if (!s.colAndreas && interior >= 0 && placement.interior != interior) {
+		return false;
+	}
 	Vector3 offset(placement.x - centre.x, placement.y - centre.y, placement.z - centre.z);
 	return glm::dot(offset, offset) <= radius * radius;
-}
-
-void wakeAround(const JPH::BodyID& id) {
-	JPH::BodyInterface& bodies = state().system->GetBodyInterface();
-	JPH::AABox box = bodies.GetTransformedShape(id).GetWorldSpaceBounds();
-	box.ExpandBy(JPH::Vec3::sReplicate(0.1f));
-	bodies.ActivateBodiesInAABox(box, {}, {});
 }
 
 bool removeBuilding(uint32_t index, int world) {
@@ -103,7 +99,7 @@ cell AMX_NATIVE_CALL A3D_RemoveBuilding(AMX* amx, const cell* params) {
 	float radius = readFloat(params, 5);
 	cell count = 0;
 	for (uint32_t index = 0; index != uint32_t(s.placementBodies.size()); ++index) {
-		if (nearPlacement(index, params[1], centre, radius) && removeBuilding(index, params[6])) {
+		if (nearPlacement(index, params[1], centre, radius, optional(params, 7, -1)) && removeBuilding(index, params[6])) {
 			++count;
 		}
 	}
@@ -116,7 +112,7 @@ cell AMX_NATIVE_CALL A3D_RestoreBuilding(AMX* amx, const cell* params) {
 	float radius = readFloat(params, 5);
 	cell count = 0;
 	for (uint32_t index = 0; index != uint32_t(s.placementBodies.size()); ++index) {
-		if (nearPlacement(index, params[1], centre, radius) && restoreBuilding(index, params[6])) {
+		if (nearPlacement(index, params[1], centre, radius, optional(params, 7, -1)) && restoreBuilding(index, params[6])) {
 			++count;
 		}
 	}
@@ -134,7 +130,7 @@ cell AMX_NATIVE_CALL A3D_GetWaterLevel(AMX* amx, const cell* params) {
 cell AMX_NATIVE_CALL A3D_IsPointInWater(AMX* amx, const cell* params) {
 	Vector3 point = readVector(params, 1);
 	float level;
-	if (!underWater(point, level)) {
+	if (!underWater(point, level, optional(params, 5, -1))) {
 		return false;
 	}
 	writeFloat(amx, params[4], level - point.z);

@@ -84,7 +84,7 @@ cell AMX_NATIVE_CALL A3D_CreateObject(AMX* amx, const cell* params) {
 	if (mass <= 0.0f) {
 		mass = model.mass.value_or(0.0f);
 	}
-	return createBody(amx, shape, params[1], readVector(params, 2), toJolt(readVector(params, 5)), mass, params[9], Kind::Object, &model);
+	return createBody(amx, shape, params[1], readVector(params, 2), toJolt(readVector(params, 5)), mass, params[9], optional(params, 10, -1), Kind::Object, &model);
 }
 
 cell AMX_NATIVE_CALL A3D_CreateSphere(AMX* amx, const cell* params) {
@@ -92,7 +92,7 @@ cell AMX_NATIVE_CALL A3D_CreateSphere(AMX* amx, const cell* params) {
 	if (radius <= 0.0f) {
 		return InvalidPhys;
 	}
-	return createBody(amx, new JPH::SphereShape(radius), params[1], readVector(params, 3), JPH::Quat::sIdentity(), readFloat(params, 6), params[7], Kind::Object);
+	return createBody(amx, new JPH::SphereShape(radius), params[1], readVector(params, 3), JPH::Quat::sIdentity(), readFloat(params, 6), params[7], optional(params, 8, -1), Kind::Object);
 }
 
 cell AMX_NATIVE_CALL A3D_CreateBox(AMX* amx, const cell* params) {
@@ -100,7 +100,7 @@ cell AMX_NATIVE_CALL A3D_CreateBox(AMX* amx, const cell* params) {
 	if (!positive(size)) {
 		return InvalidPhys;
 	}
-	return createBody(amx, boxOf(size), params[1], readVector(params, 5), toJolt(readVector(params, 8)), readFloat(params, 11), params[12], Kind::Object);
+	return createBody(amx, boxOf(size), params[1], readVector(params, 5), toJolt(readVector(params, 8)), readFloat(params, 11), params[12], optional(params, 13, -1), Kind::Object);
 }
 
 cell AMX_NATIVE_CALL A3D_CreateStaticObject(AMX* amx, const cell* params) {
@@ -108,7 +108,7 @@ cell AMX_NATIVE_CALL A3D_CreateStaticObject(AMX* amx, const cell* params) {
 	if (shape == nullptr) {
 		return InvalidPhys;
 	}
-	return createBody(amx, shape, params[1], readVector(params, 2), toJolt(readVector(params, 5)), 0.0f, params[8], Kind::Static);
+	return createBody(amx, shape, params[1], readVector(params, 2), toJolt(readVector(params, 5)), 0.0f, params[8], optional(params, 9, -1), Kind::Static);
 }
 
 cell AMX_NATIVE_CALL A3D_CreateStaticBox(AMX* amx, const cell* params) {
@@ -116,7 +116,7 @@ cell AMX_NATIVE_CALL A3D_CreateStaticBox(AMX* amx, const cell* params) {
 	if (!positive(size)) {
 		return InvalidPhys;
 	}
-	return createBody(amx, boxOf(size), -1, readVector(params, 4), toJolt(readVector(params, 7)), 0.0f, params[10], Kind::Static);
+	return createBody(amx, boxOf(size), -1, readVector(params, 4), toJolt(readVector(params, 7)), 0.0f, params[10], optional(params, 11, -1), Kind::Static);
 }
 
 cell AMX_NATIVE_CALL A3D_CreateStaticCylinder(AMX* amx, const cell* params) {
@@ -131,7 +131,7 @@ cell AMX_NATIVE_CALL A3D_CreateStaticCylinder(AMX* amx, const cell* params) {
 	if (!result.IsValid()) {
 		return InvalidPhys;
 	}
-	return createBody(amx, result.Get(), -1, readVector(params, 3), toJolt(readVector(params, 6)), 0.0f, params[9], Kind::Static);
+	return createBody(amx, result.Get(), -1, readVector(params, 3), toJolt(readVector(params, 6)), 0.0f, params[9], optional(params, 10, -1), Kind::Static);
 }
 
 cell AMX_NATIVE_CALL A3D_CreateZone(AMX* amx, const cell* params) {
@@ -139,7 +139,7 @@ cell AMX_NATIVE_CALL A3D_CreateZone(AMX* amx, const cell* params) {
 	if (!positive(size)) {
 		return InvalidPhys;
 	}
-	return createBody(amx, boxOf(size), -1, readVector(params, 4), toJolt(readVector(params, 7)), 0.0f, params[10], Kind::Zone);
+	return createBody(amx, boxOf(size), -1, readVector(params, 4), toJolt(readVector(params, 7)), 0.0f, params[10], optional(params, 11, -1), Kind::Zone);
 }
 
 cell AMX_NATIVE_CALL A3D_CreateZoneSphere(AMX* amx, const cell* params) {
@@ -147,7 +147,7 @@ cell AMX_NATIVE_CALL A3D_CreateZoneSphere(AMX* amx, const cell* params) {
 	if (radius <= 0.0f) {
 		return InvalidPhys;
 	}
-	return createBody(amx, new JPH::SphereShape(radius), -1, readVector(params, 2), JPH::Quat::sIdentity(), 0.0f, params[5], Kind::Zone);
+	return createBody(amx, new JPH::SphereShape(radius), -1, readVector(params, 2), JPH::Quat::sIdentity(), 0.0f, params[5], optional(params, 6, -1), Kind::Zone);
 }
 
 cell AMX_NATIVE_CALL A3D_DestroyObject(AMX* amx, const cell* params) {
@@ -301,6 +301,24 @@ cell AMX_NATIVE_CALL A3D_SetWorld(AMX* amx, const cell* params) {
 cell AMX_NATIVE_CALL A3D_GetWorld(AMX* amx, const cell* params) {
 	Body* body = findBody(params[1]);
 	return body == nullptr ? -1 : cell(body->world);
+}
+
+cell AMX_NATIVE_CALL A3D_SetInterior(AMX* amx, const cell* params) {
+	Body* body = findBody(params[1]);
+	if (body == nullptr) {
+		return false;
+	}
+	body->interior = params[2];
+	regroupBody(*body);
+	if (body->kind == Kind::Object) {
+		bodies().ActivateBody(body->id);
+	}
+	return true;
+}
+
+cell AMX_NATIVE_CALL A3D_GetInterior(AMX* amx, const cell* params) {
+	Body* body = findBody(params[1]);
+	return body == nullptr ? -1 : cell(body->interior);
 }
 
 cell AMX_NATIVE_CALL A3D_GetPosition(AMX* amx, const cell* params) {
@@ -482,6 +500,8 @@ const AMX_NATIVE_INFO natives[] = {
 	{ "A3D_SetCollisionSpeed", A3D_SetCollisionSpeed },
 	{ "A3D_SetWorld", A3D_SetWorld },
 	{ "A3D_GetWorld", A3D_GetWorld },
+	{ "A3D_SetInterior", A3D_SetInterior },
+	{ "A3D_GetInterior", A3D_GetInterior },
 	{ "A3D_GetPosition", A3D_GetPosition },
 	{ "A3D_SetPosition", A3D_SetPosition },
 	{ "A3D_GetRotation", A3D_GetRotation },

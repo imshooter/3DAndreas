@@ -126,7 +126,7 @@ public:
 Contacts contacts;
 Activation activation;
 
-void createPlayerBody(int playerid, Vector3 position, int world) {
+void createPlayerBody(int playerid, Vector3 position, int world, int interior) {
 	State& s = state();
 	JPH::BodyCreationSettings settings(pedShape(), JPH::RVec3(position.x, position.y, position.z), JPH::Quat::sIdentity(), JPH::EMotionType::Dynamic, playerLayer());
 	settings.mUserData = userData(Kind::Player, playerid);
@@ -137,11 +137,10 @@ void createPlayerBody(int playerid, Vector3 position, int world) {
 	settings.mGravityFactor = 0.0f;
 	settings.mLinearDamping = 0.0f;
 	settings.mAllowSleeping = false;
-	settings.mCollisionGroup = bodyGroup(world, Kind::Player, CollideAll);
-	JPH::BodyID id = s.system->GetBodyInterface().CreateAndAddBody(settings, JPH::EActivation::Activate);
-	rememberBody(id, settings.mUserData);
+	JPH::BodyID id = addBody(settings, world, interior, JPH::EActivation::Activate);
 	s.playerBodies[playerid] = id;
 	s.playerWorlds[playerid] = world;
+	s.playerInteriors[playerid] = interior;
 }
 
 void updatePlayers(float elapsed) {
@@ -155,6 +154,7 @@ void updatePlayers(float elapsed) {
 		if (playerid >= int(s.playerBodies.size())) {
 			s.playerBodies.resize(playerid + 1);
 			s.playerWorlds.resize(playerid + 1, -1);
+			s.playerInteriors.resize(playerid + 1, -1);
 			s.playerSeen.resize(playerid + 1);
 			s.playerSeenAt.resize(playerid + 1, 0.0);
 		}
@@ -165,7 +165,8 @@ void updatePlayers(float elapsed) {
 		}
 		Vector3 position = player->getPosition();
 		int world = player->getVirtualWorld();
-		if (!id.IsInvalid() && s.playerWorlds[playerid] != world) {
+		int interior = int(player->getInterior());
+		if (!id.IsInvalid() && (s.playerWorlds[playerid] != world || s.playerInteriors[playerid] != interior)) {
 			removePlayer(playerid);
 		}
 		if (position != s.playerSeen[playerid]) {
@@ -173,7 +174,7 @@ void updatePlayers(float elapsed) {
 			s.playerSeenAt[playerid] = s.now;
 		}
 		if (id.IsInvalid()) {
-			createPlayerBody(playerid, position, world);
+			createPlayerBody(playerid, position, world, interior);
 			continue;
 		}
 		JPH::RVec3 target = carriedPosition(position, player->getVelocity(), s.now - s.playerSeenAt[playerid]);
@@ -338,7 +339,7 @@ Body* findBody(int index) {
 	return &s.bodies[index];
 }
 
-int createBody(AMX* owner, const JPH::Shape* shape, int modelid, Vector3 position, JPH::QuatArg rotation, float mass, int world, Kind kind, const ModelSettings* model) {
+int createBody(AMX* owner, const JPH::Shape* shape, int modelid, Vector3 position, JPH::QuatArg rotation, float mass, int world, int interior, Kind kind, const ModelSettings* model) {
 	State& s = state();
 	int index;
 	if (!s.freeBodies.empty()) {
@@ -356,7 +357,6 @@ int createBody(AMX* owner, const JPH::Shape* shape, int modelid, Vector3 positio
 	JPH::EMotionType motion = dynamic ? JPH::EMotionType::Dynamic : zone ? JPH::EMotionType::Kinematic : JPH::EMotionType::Static;
 	JPH::BodyCreationSettings settings(shape, JPH::RVec3(position.x, position.y, position.z), rotation, motion, dynamic ? movingLayer() : staticLayer());
 	settings.mUserData = userData(kind, index);
-	settings.mCollisionGroup = bodyGroup(world, kind, CollideAll);
 	settings.mFriction = model != nullptr ? model->friction.value_or(0.5f) : 0.5f;
 	settings.mRestitution = !dynamic ? 1.0f : model != nullptr ? model->bounce.value_or(0.3f) : 0.3f;
 	settings.mIsSensor = zone;
@@ -367,12 +367,11 @@ int createBody(AMX* owner, const JPH::Shape* shape, int modelid, Vector3 positio
 		settings.mLinearDamping = model != nullptr ? model->linearDamping.value_or(0.1f) : 0.1f;
 		settings.mAngularDamping = model != nullptr ? model->angularDamping.value_or(0.3f) : 0.3f;
 	}
-	JPH::BodyID id = s.system->GetBodyInterface().CreateAndAddBody(settings, dynamic || zone ? JPH::EActivation::Activate : JPH::EActivation::DontActivate);
+	JPH::BodyID id = addBody(settings, world, interior, dynamic || zone ? JPH::EActivation::Activate : JPH::EActivation::DontActivate);
 	if (id.IsInvalid()) {
 		s.freeBodies.push_back(index);
 		return InvalidPhys;
 	}
-	rememberBody(id, settings.mUserData);
 	Body& body = s.bodies[index];
 	body = Body();
 	body.id = id;
@@ -380,6 +379,7 @@ int createBody(AMX* owner, const JPH::Shape* shape, int modelid, Vector3 positio
 	body.kind = kind;
 	body.modelid = modelid;
 	body.world = world;
+	body.interior = interior;
 	body.owner = owner;
 	body.mass = dynamic ? settings.mMassPropertiesOverride.mMass : 0.0f;
 	body.collisionSpeed = s.settings.collisionSpeed;
@@ -429,9 +429,16 @@ bool destroyBody(int index) {
 
 void regroupBody(Body& body) {
 	State& s = state();
-	JPH::BodyLockWrite lock(s.system->GetBodyLockInterface(), body.id);
-	if (lock.Succeeded()) {
-		lock.GetBody().SetCollisionGroup(bodyGroup(body.world, body.kind, body.collisions));
+	{
+		JPH::BodyLockWrite lock(s.system->GetBodyLockInterface(), body.id);
+		if (lock.Succeeded()) {
+			s.bodyContexts[body.id.GetIndex()] = { body.world, body.interior };
+			lock.GetBody().SetCollisionGroup(bodyGroup(body.id, body.kind, body.collisions));
+		}
+	}
+	s.system->GetBodyInterface().InvalidateContactCache(body.id);
+	if (body.kind != Kind::Object) {
+		wakeAround(body.id);
 	}
 }
 
@@ -468,6 +475,7 @@ void removePlayer(int playerid) {
 	rememberBody(s.playerBodies[playerid], 0);
 	s.playerBodies[playerid] = JPH::BodyID();
 	s.playerWorlds[playerid] = -1;
+	s.playerInteriors[playerid] = -1;
 }
 
 void step(double elapsed) {

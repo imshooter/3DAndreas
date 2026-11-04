@@ -110,12 +110,12 @@ bool rounded(const JPH::BodyID& id, const JPH::SubShapeID& part) {
 	return type == JPH::EShapeSubType::Sphere || type == JPH::EShapeSubType::Capsule || type == JPH::EShapeSubType::TaperedCapsule || type == JPH::EShapeSubType::Cylinder;
 }
 
-std::vector<JPH::BodyID> overlapping(const JPH::Shape* shape, JPH::RMat44Arg transform, int world, uint32_t flags) {
+std::vector<JPH::BodyID> overlapping(const JPH::Shape* shape, JPH::RMat44Arg transform, int world, uint32_t flags, int interior) {
 	State& s = state();
 	JPH::CollideShapeSettings settings;
 	settings.mBackFaceMode = JPH::EBackFaceMode::CollideWithBackFaces;
 	JPH::AllHitCollisionCollector<JPH::CollideShapeCollector> collector;
-	QueryFilter filter(world, flags);
+	QueryFilter filter(world, flags, interior);
 	s.system->GetNarrowPhaseQuery().CollideShape(shape, JPH::Vec3::sReplicate(1.0f), transform, settings, transform.GetTranslation(), collector, {}, {}, filter);
 	std::vector<JPH::BodyID> found;
 	for (const JPH::CollideShapeResult& result : collector.mHits) {
@@ -160,9 +160,8 @@ bool inCone(Vector3 apex, Vector3 direction, float cosine, float range, Vector3 
 
 }
 
-QueryFilter::QueryFilter(int world, uint32_t flags, JPH::BodyID first, JPH::BodyID second) :
-	world_(world < 0 ? -1 : world),
-	group_(world < 0 ? -1 : int64_t(world) + 1),
+QueryFilter::QueryFilter(int world, uint32_t flags, int interior, JPH::BodyID first, JPH::BodyID second) :
+	context_{ world, interior },
 	flags_(flags),
 	first_(first),
 	second_(second) {
@@ -175,11 +174,14 @@ bool QueryFilter::ShouldCollideLocked(const JPH::Body& body) const {
 	if ((flags_ & bitOf(kindOf(body.GetUserData()))) == 0) {
 		return false;
 	}
+	if (context_.world < 0 && context_.interior < 0) {
+		return true;
+	}
 	JPH::CollisionGroup::GroupID group = body.GetCollisionGroup().GetGroupID();
 	if ((group & MapGroup) != 0) {
-		return !mapHidden(group & ~MapGroup, world_);
+		return mapMatches(group & ~MapGroup, context_);
 	}
-	return group_ < 0 || group == 0 || int64_t(group) == group_;
+	return context_.matches(state().bodyContexts[group]);
 }
 
 JPH::RVec3 toJoltPoint(Vector3 point) {
@@ -190,7 +192,7 @@ Vector3 toPoint(JPH::RVec3Arg point) {
 	return Vector3(float(point.GetX()), float(point.GetY()), float(point.GetZ()));
 }
 
-bool castRay(Vector3 from, Vector3 to, int world, uint32_t flags, bool normal, QueryHit& hit, JPH::BodyID first, JPH::BodyID second) {
+bool castRay(Vector3 from, Vector3 to, int world, uint32_t flags, bool normal, QueryHit& hit, int interior, JPH::BodyID first, JPH::BodyID second) {
 	State& s = state();
 	JPH::Vec3 direction(to.x - from.x, to.y - from.y, to.z - from.z);
 	if (direction.IsNearZero()) {
@@ -198,7 +200,7 @@ bool castRay(Vector3 from, Vector3 to, int world, uint32_t flags, bool normal, Q
 	}
 	JPH::RRayCast ray(toJoltPoint(from), direction);
 	JPH::ClosestHitCollisionCollector<JPH::CastRayCollector> collector;
-	QueryFilter filter(world, flags, first, second);
+	QueryFilter filter(world, flags, interior, first, second);
 	s.system->GetNarrowPhaseQuery().CastRay(ray, raySettings(), collector, {}, {}, filter);
 	float water;
 	if ((flags & CollideWater) != 0 && waterAlong(from, to, water) && (!collector.HadHit() || water < collector.mHit.mFraction)) {
@@ -230,7 +232,7 @@ bool castRay(Vector3 from, Vector3 to, int world, uint32_t flags, bool normal, Q
 	return true;
 }
 
-bool blocked(Vector3 from, Vector3 to, int world, uint32_t flags) {
+bool blocked(Vector3 from, Vector3 to, int world, uint32_t flags, int interior) {
 	State& s = state();
 	JPH::Vec3 direction(to.x - from.x, to.y - from.y, to.z - from.z);
 	if (direction.IsNearZero()) {
@@ -241,12 +243,12 @@ bool blocked(Vector3 from, Vector3 to, int world, uint32_t flags) {
 		return true;
 	}
 	JPH::AnyHitCollisionCollector<JPH::CastRayCollector> collector;
-	QueryFilter filter(world, flags);
+	QueryFilter filter(world, flags, interior);
 	s.system->GetNarrowPhaseQuery().CastRay(JPH::RRayCast(toJoltPoint(from), direction), raySettings(), collector, {}, {}, filter);
 	return collector.HadHit();
 }
 
-bool sweepSphere(float radius, Vector3 from, Vector3 to, int world, uint32_t flags, QueryHit& hit) {
+bool sweepSphere(float radius, Vector3 from, Vector3 to, int world, uint32_t flags, QueryHit& hit, int interior) {
 	State& s = state();
 	JPH::Vec3 direction(to.x - from.x, to.y - from.y, to.z - from.z);
 	if (radius <= 0.0f || direction.IsNearZero()) {
@@ -258,7 +260,7 @@ bool sweepSphere(float radius, Vector3 from, Vector3 to, int world, uint32_t fla
 	JPH::ShapeCastSettings settings;
 	settings.mBackFaceModeTriangles = JPH::EBackFaceMode::CollideWithBackFaces;
 	JPH::ClosestHitCollisionCollector<JPH::CastShapeCollector> collector;
-	QueryFilter filter(world, flags);
+	QueryFilter filter(world, flags, interior);
 	s.system->GetNarrowPhaseQuery().CastShape(cast, settings, toJoltPoint(from), collector, {}, {}, filter);
 	float water;
 	if ((flags & CollideWater) != 0 && waterAlong(from, to, water) && (!collector.HadHit() || water < collector.mHit.mFraction)) {
@@ -278,12 +280,12 @@ bool sweepSphere(float radius, Vector3 from, Vector3 to, int world, uint32_t fla
 	return true;
 }
 
-bool touching(const JPH::Shape* shape, JPH::RMat44Arg transform, int world, uint32_t flags) {
+bool touching(const JPH::Shape* shape, JPH::RMat44Arg transform, int world, uint32_t flags, int interior) {
 	State& s = state();
 	JPH::CollideShapeSettings settings;
 	settings.mBackFaceMode = JPH::EBackFaceMode::CollideWithBackFaces;
 	JPH::AnyHitCollisionCollector<JPH::CollideShapeCollector> collector;
-	QueryFilter filter(world, flags);
+	QueryFilter filter(world, flags, interior);
 	s.system->GetNarrowPhaseQuery().CollideShape(shape, JPH::Vec3::sReplicate(1.0f), transform, settings, transform.GetTranslation(), collector, {}, {}, filter);
 	return collector.HadHit();
 }
@@ -306,8 +308,8 @@ bool present(IPlayer& player) {
 	return state != PlayerState_None && state != PlayerState_Wasted && state != PlayerState_Spectating;
 }
 
-bool mapBetween(Vector3 from, Vector3 to) {
-	return blocked(from, to, -1, CollideMap);
+bool mapBetween(Vector3 from, Vector3 to, int world) {
+	return blocked(from, to, world, CollideMap);
 }
 
 void ownBodies(IPlayer& player, JPH::BodyID& own, JPH::BodyID& ride) {
@@ -326,7 +328,7 @@ namespace {
 
 cell AMX_NATIVE_CALL A3D_RayCast(AMX* amx, const cell* params) {
 	QueryHit hit;
-	if (!castRay(readVector(params, 1), readVector(params, 4), params[13], uint32_t(params[14]), false, hit)) {
+	if (!castRay(readVector(params, 1), readVector(params, 4), params[13], uint32_t(params[14]), false, hit, optional(params, 15, -1))) {
 		return false;
 	}
 	writeVector(amx, params, 7, toPoint(hit.point));
@@ -338,7 +340,7 @@ cell AMX_NATIVE_CALL A3D_RayCast(AMX* amx, const cell* params) {
 
 cell AMX_NATIVE_CALL A3D_RayCastNormal(AMX* amx, const cell* params) {
 	QueryHit hit;
-	if (!castRay(readVector(params, 1), readVector(params, 4), params[16], uint32_t(params[17]), true, hit)) {
+	if (!castRay(readVector(params, 1), readVector(params, 4), params[16], uint32_t(params[17]), true, hit, optional(params, 18, -1))) {
 		return false;
 	}
 	writeVector(amx, params, 7, toPoint(hit.point));
@@ -365,7 +367,7 @@ cell AMX_NATIVE_CALL A3D_RayCastAll(AMX* amx, const cell* params) {
 	}
 	JPH::RRayCast ray(toJoltPoint(from), direction);
 	JPH::AllHitCollisionCollector<JPH::CastRayCollector> collector;
-	QueryFilter filter(params[14], uint32_t(params[15]));
+	QueryFilter filter(params[14], uint32_t(params[15]), optional(params, 16, -1));
 	s.system->GetNarrowPhaseQuery().CastRay(ray, raySettings(), collector, {}, {}, filter);
 	collector.Sort();
 	float water;
@@ -396,14 +398,14 @@ cell AMX_NATIVE_CALL A3D_RayCastAll(AMX* amx, const cell* params) {
 }
 
 cell AMX_NATIVE_CALL A3D_IsLineOfSight(AMX* amx, const cell* params) {
-	return !blocked(readVector(params, 1), readVector(params, 4), params[7], uint32_t(params[8]));
+	return !blocked(readVector(params, 1), readVector(params, 4), params[7], uint32_t(params[8]), optional(params, 9, -1));
 }
 
 cell AMX_NATIVE_CALL A3D_FindGround(AMX* amx, const cell* params) {
 	Vector3 from = readVector(params, 1);
 	float depth = readFloat(params, 7);
 	QueryHit hit;
-	if (depth <= 0.0f || !castRay(from, Vector3(from.x, from.y, from.z - depth), params[5], uint32_t(params[6]), false, hit)) {
+	if (depth <= 0.0f || !castRay(from, Vector3(from.x, from.y, from.z - depth), params[5], uint32_t(params[6]), false, hit, optional(params, 8, -1))) {
 		return false;
 	}
 	return writeFloat(amx, params[4], float(hit.point.GetZ()));
@@ -412,7 +414,7 @@ cell AMX_NATIVE_CALL A3D_FindGround(AMX* amx, const cell* params) {
 cell AMX_NATIVE_CALL A3D_SweepSphere(AMX* amx, const cell* params) {
 	Vector3 to = readVector(params, 5);
 	QueryHit hit;
-	if (!sweepSphere(readFloat(params, 1), readVector(params, 2), to, params[14], uint32_t(params[15]), hit)) {
+	if (!sweepSphere(readFloat(params, 1), readVector(params, 2), to, params[14], uint32_t(params[15]), hit, optional(params, 16, -1))) {
 		writeVector(amx, params, 8, to);
 		return false;
 	}
@@ -430,7 +432,7 @@ cell AMX_NATIVE_CALL A3D_OverlapSphere(AMX* amx, const cell* params) {
 	}
 	JPH::SphereShape sphere(radius);
 	sphere.SetEmbedded();
-	std::vector<JPH::BodyID> found = overlapping(&sphere, JPH::RMat44::sTranslation(toJoltPoint(readVector(params, 1))), params[8], uint32_t(params[9]));
+	std::vector<JPH::BodyID> found = overlapping(&sphere, JPH::RMat44::sTranslation(toJoltPoint(readVector(params, 1))), params[8], uint32_t(params[9]), optional(params, 10, -1));
 	return writeOverlaps(amx, found, params[5], params[6], params[7]);
 }
 
@@ -443,7 +445,7 @@ cell AMX_NATIVE_CALL A3D_OverlapBox(AMX* amx, const cell* params) {
 	JPH::BoxShape box(half, std::min(JPH::cDefaultConvexRadius, half.ReduceMin()));
 	box.SetEmbedded();
 	JPH::RMat44 transform = JPH::RMat44::sRotationTranslation(toJolt(readVector(params, 7)), toJoltPoint(readVector(params, 4)));
-	std::vector<JPH::BodyID> found = overlapping(&box, transform, params[13], uint32_t(params[14]));
+	std::vector<JPH::BodyID> found = overlapping(&box, transform, params[13], uint32_t(params[14]), optional(params, 15, -1));
 	return writeOverlaps(amx, found, params[10], params[11], params[12]);
 }
 
@@ -456,13 +458,13 @@ cell AMX_NATIVE_CALL A3D_OverlapModel(AMX* amx, const cell* params) {
 	if (shape == nullptr) {
 		return 0;
 	}
-	std::vector<JPH::BodyID> found = overlapping(shape, modelTransform(params), params[11], uint32_t(params[12]));
+	std::vector<JPH::BodyID> found = overlapping(shape, modelTransform(params), params[11], uint32_t(params[12]), optional(params, 13, -1));
 	return writeOverlaps(amx, found, params[8], params[9], params[10]);
 }
 
 cell AMX_NATIVE_CALL A3D_IsModelColliding(AMX* amx, const cell* params) {
 	JPH::ShapeRefC shape = dynamicShape(params[1]);
-	return shape != nullptr && touching(shape, modelTransform(params), params[8], uint32_t(params[9]));
+	return shape != nullptr && touching(shape, modelTransform(params), params[8], uint32_t(params[9]), optional(params, 10, -1));
 }
 
 cell AMX_NATIVE_CALL A3D_GetPlayersInSphere(AMX* amx, const cell* params) {
@@ -480,7 +482,7 @@ cell AMX_NATIVE_CALL A3D_GetPlayersInSphere(AMX* amx, const cell* params) {
 		if (distance > radius) {
 			continue;
 		}
-		if (sight && blocked(centre, position + Vector3(0.0f, 0.0f, ChestHeight), params[7], CollideMap | CollideStatic)) {
+		if (sight && blocked(centre, position + Vector3(0.0f, 0.0f, ChestHeight), params[7], CollideMap | CollideStatic, params[8])) {
 			continue;
 		}
 		found.emplace_back(distance, player->getID());
@@ -511,7 +513,7 @@ cell AMX_NATIVE_CALL A3D_GetPlayersInCone(AMX* amx, const cell* params) {
 		if (!inCone(apex, direction, cosine, range, target, distance)) {
 			continue;
 		}
-		if (sight && blocked(apex, target, world, CollideMap | CollideStatic)) {
+		if (sight && blocked(apex, target, world, CollideMap | CollideStatic, params[12])) {
 			continue;
 		}
 		found.emplace_back(distance, player->getID());
@@ -537,7 +539,7 @@ cell AMX_NATIVE_CALL A3D_GetVehiclesInSphere(AMX* amx, const cell* params) {
 		if (distance > radius) {
 			continue;
 		}
-		if (sight && blocked(centre, position, params[7], CollideMap | CollideStatic)) {
+		if (sight && blocked(centre, position, params[7], CollideMap | CollideStatic, params[8])) {
 			continue;
 		}
 		found.emplace_back(distance, vehicle->getID());
@@ -613,7 +615,7 @@ cell AMX_NATIVE_CALL A3D_CreateExplosion(AMX* amx, const cell* params) {
 	}
 	JPH::SphereShape sphere(radius);
 	sphere.SetEmbedded();
-	std::vector<JPH::BodyID> found = overlapping(&sphere, JPH::RMat44::sTranslation(toJoltPoint(centre)), params[6], CollideObjects);
+	std::vector<JPH::BodyID> found = overlapping(&sphere, JPH::RMat44::sTranslation(toJoltPoint(centre)), params[6], CollideObjects, optional(params, 7, -1));
 	JPH::BodyInterface& bodies = s.system->GetBodyInterface();
 	cell pushed = 0;
 	for (const JPH::BodyID& id : found) {
@@ -646,7 +648,7 @@ cell AMX_NATIVE_CALL A3D_GetPlayerTarget(AMX* amx, const cell* params) {
 	ownBodies(*player, own, ride);
 	Vector3 end = aim.camPos + aim.camFrontVector / length * readFloat(params, 8);
 	QueryHit hit;
-	if (!castRay(aim.camPos, end, player->getVirtualWorld(), uint32_t(params[9]), false, hit, own, ride)) {
+	if (!castRay(aim.camPos, end, player->getVirtualWorld(), uint32_t(params[9]), false, hit, int(player->getInterior()), own, ride)) {
 		return false;
 	}
 	writeVector(amx, params, 2, toPoint(hit.point));

@@ -33,17 +33,16 @@ JPH::ShapeRefC vehicleShape(int model) {
 	return shape;
 }
 
-void createVehicleBody(int vehicleid, const JPH::Shape* shape, int model, Vector3 position, JPH::QuatArg rotation, int world) {
+void createVehicleBody(int vehicleid, const JPH::Shape* shape, int model, Vector3 position, JPH::QuatArg rotation, int world, int interior) {
 	State& s = state();
 	JPH::BodyCreationSettings settings(shape, JPH::RVec3(position.x, position.y, position.z), rotation, JPH::EMotionType::Kinematic, playerLayer());
 	settings.mUserData = userData(Kind::Vehicle, vehicleid);
 	settings.mRestitution = 1.0f;
-	settings.mCollisionGroup = bodyGroup(world, Kind::Vehicle, CollideAll);
-	JPH::BodyID id = s.system->GetBodyInterface().CreateAndAddBody(settings, JPH::EActivation::DontActivate);
-	rememberBody(id, settings.mUserData);
+	JPH::BodyID id = addBody(settings, world, interior, JPH::EActivation::DontActivate);
 	s.vehicleBodies[vehicleid] = id;
 	s.vehicleModels[vehicleid] = model;
 	s.vehicleWorlds[vehicleid] = world;
+	s.vehicleInteriors[vehicleid] = interior;
 	s.vehiclePositions[vehicleid] = position;
 	s.vehicleMoving[vehicleid] = 0;
 }
@@ -67,6 +66,7 @@ void updateVehicles(float elapsed) {
 			s.vehicleBodies.resize(vehicleid + 1);
 			s.vehicleModels.resize(vehicleid + 1, -1);
 			s.vehicleWorlds.resize(vehicleid + 1, -1);
+			s.vehicleInteriors.resize(vehicleid + 1, -1);
 			s.vehiclePositions.resize(vehicleid + 1);
 			s.vehicleRotations.resize(vehicleid + 1);
 			s.vehicleSeenAt.resize(vehicleid + 1, 0.0);
@@ -74,8 +74,9 @@ void updateVehicles(float elapsed) {
 		}
 		int model = vehicle->getModel();
 		int world = vehicle->getVirtualWorld();
+		int interior = vehicle->getInterior();
 		JPH::BodyID& id = s.vehicleBodies[vehicleid];
-		if (!id.IsInvalid() && (s.vehicleModels[vehicleid] != model || s.vehicleWorlds[vehicleid] != world)) {
+		if (!id.IsInvalid() && (s.vehicleModels[vehicleid] != model || s.vehicleWorlds[vehicleid] != world || s.vehicleInteriors[vehicleid] != interior)) {
 			removeVehicle(vehicleid);
 		}
 		Vector3 position = vehicle->getPosition();
@@ -83,7 +84,7 @@ void updateVehicles(float elapsed) {
 		if (id.IsInvalid()) {
 			JPH::ShapeRefC shape = vehicleShape(model);
 			if (shape != nullptr) {
-				createVehicleBody(vehicleid, shape, model, position, vehicleRotation(synced), world);
+				createVehicleBody(vehicleid, shape, model, position, vehicleRotation(synced), world, interior);
 				s.vehicleRotations[vehicleid] = synced.q;
 				s.vehicleSeenAt[vehicleid] = s.now;
 			}
@@ -130,6 +131,7 @@ void removeVehicle(int vehicleid) {
 	s.vehicleBodies[vehicleid] = JPH::BodyID();
 	s.vehicleModels[vehicleid] = -1;
 	s.vehicleWorlds[vehicleid] = -1;
+	s.vehicleInteriors[vehicleid] = -1;
 }
 
 }

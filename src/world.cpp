@@ -34,7 +34,6 @@ const JPH::BroadPhaseLayer MovingBroadPhase(1);
 constexpr float MinimumHalfExtent = 0.005f;
 constexpr size_t MaxMeshMaterials = 32;
 constexpr unsigned MaxBuildThreads = 16;
-constexpr JPH::CollisionGroup::GroupID AnyWorld = 0;
 
 class BroadPhaseLayers final : public JPH::BroadPhaseLayerInterface {
 public:
@@ -99,23 +98,19 @@ bool accepts(const JPH::CollisionGroup& self, const JPH::CollisionGroup& other) 
 	return (self.GetSubGroupID() & collisionBit(otherKind)) != 0;
 }
 
-int worldOf(JPH::CollisionGroup::GroupID group) {
-	return group == AnyWorld ? -1 : int(group) - 1;
-}
-
 class WorldFilter final : public JPH::GroupFilter {
 public:
 	bool CanCollide(const JPH::CollisionGroup& first, const JPH::CollisionGroup& second) const override {
+		const State& s = state();
 		JPH::CollisionGroup::GroupID one = first.GetGroupID();
 		JPH::CollisionGroup::GroupID other = second.GetGroupID();
 		if ((one & MapGroup) != 0) {
-			return (other & MapGroup) == 0 && !mapHidden(one & ~MapGroup, worldOf(other)) && accepts(first, second) && accepts(second, first);
+			return (other & MapGroup) == 0 && mapMatches(one & ~MapGroup, s.bodyContexts[other]) && accepts(first, second) && accepts(second, first);
 		}
 		if ((other & MapGroup) != 0) {
-			return !mapHidden(other & ~MapGroup, worldOf(one)) && accepts(first, second) && accepts(second, first);
+			return mapMatches(other & ~MapGroup, s.bodyContexts[one]) && accepts(first, second) && accepts(second, first);
 		}
-		bool sameWorld = one == AnyWorld || other == AnyWorld || one == other;
-		return sameWorld && accepts(first, second) && accepts(second, first);
+		return s.bodyContexts[one].matches(s.bodyContexts[other]) && accepts(first, second) && accepts(second, first);
 	}
 };
 
@@ -385,10 +380,37 @@ int indexOf(uint64_t data) {
 	return int(uint32_t(data));
 }
 
-JPH::CollisionGroup bodyGroup(int world, Kind kind, uint32_t collisions) {
+JPH::CollisionGroup bodyGroup(const JPH::BodyID& id, Kind kind, uint32_t collisions) {
 	State& s = state();
-	JPH::CollisionGroup::GroupID group = world < 0 ? AnyWorld : JPH::CollisionGroup::GroupID(world) + 1;
-	return JPH::CollisionGroup(s.worlds, group, (uint32_t(kind) << 8) | (collisions & CollideAll));
+	return JPH::CollisionGroup(s.worlds, id.GetIndex(), (uint32_t(kind) << 8) | (collisions & CollideAll));
+}
+
+JPH::BodyID addBody(const JPH::BodyCreationSettings& settings, int world, int interior, JPH::EActivation activation) {
+	State& s = state();
+	JPH::BodyInterface& bodies = s.system->GetBodyInterface();
+	JPH::Body* body = bodies.CreateBody(settings);
+	if (body == nullptr) {
+		return JPH::BodyID();
+	}
+	JPH::BodyID id = body->GetID();
+	s.bodyContexts[id.GetIndex()] = { world, interior };
+	body->SetCollisionGroup(bodyGroup(id, kindOf(settings.mUserData), CollideAll));
+	rememberBody(id, settings.mUserData);
+	bodies.AddBody(id, activation);
+	return id;
+}
+
+bool mapMatches(uint32_t placement, const Context& context) {
+	const State& s = state();
+	return (s.colAndreas || context.interior < 0 || s.placements[placement].interior == context.interior)
+		&& !mapHidden(placement, context.world);
+}
+
+void wakeAround(const JPH::BodyID& id) {
+	JPH::BodyInterface& bodies = state().system->GetBodyInterface();
+	JPH::AABox box = bodies.GetTransformedShape(id).GetWorldSpaceBounds();
+	box.ExpandBy(JPH::Vec3::sReplicate(0.1f));
+	bodies.ActivateBodiesInAABox(box, {}, {});
 }
 
 void rememberBody(const JPH::BodyID& id, uint64_t data) {
@@ -436,6 +458,7 @@ void startWorld(int maxBodies) {
 	s.jobs = std::make_unique<JPH::JobSystemThreadPool>(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, std::max(s.settings.threads, 0));
 	s.worlds = new WorldFilter();
 	s.userDataById.assign(size_t(maxBodies), 0);
+	s.bodyContexts.assign(size_t(maxBodies), Context());
 	s.system = std::make_unique<JPH::PhysicsSystem>();
 	s.system->Init(JPH::uint(maxBodies), 0, 65536, 20480, broadPhaseLayers, layerBroadPhaseFilter, layerPairFilter);
 	s.system->SetGravity(JPH::Vec3(0.0f, 0.0f, -StandardGravity));

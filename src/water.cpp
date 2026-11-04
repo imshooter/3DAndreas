@@ -180,11 +180,11 @@ bool waterAlong(Vector3 from, Vector3 to, float& fraction) {
 	return found;
 }
 
-bool underWater(Vector3 point, float& level) {
+bool underWater(Vector3 point, float& level, int world) {
 	if (!waterLevel(point.x, point.y, level) || level < point.z) {
 		return false;
 	}
-	return !mapBetween(Vector3(point.x, point.y, level), point);
+	return !mapBetween(Vector3(point.x, point.y, level), point, world);
 }
 
 void setBuoyancy(int index, float buoyancy, float drag) {
@@ -228,7 +228,7 @@ void applyBuoyancy(float elapsed) {
 		if (!waterLevel(point.x, point.y, level) || level < bottom) {
 			continue;
 		}
-		if (level > point.z && mapBetween(Vector3(point.x, point.y, level), point)) {
+		if (level > point.z && mapBetween(Vector3(point.x, point.y, level), point, body->world)) {
 			continue;
 		}
 		JPH::BodyLockWrite lock(s.system->GetBodyLockInterface(), body->id);

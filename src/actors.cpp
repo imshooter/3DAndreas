@@ -13,9 +13,7 @@ void createActorBody(int actorid, Vector3 position, int world) {
 	JPH::BodyCreationSettings settings(pedShape(), JPH::RVec3(position.x, position.y, position.z), JPH::Quat::sIdentity(), JPH::EMotionType::Kinematic, playerLayer());
 	settings.mUserData = userData(Kind::Actor, actorid);
 	settings.mRestitution = 1.0f;
-	settings.mCollisionGroup = bodyGroup(world, Kind::Actor, CollideAll);
-	JPH::BodyID id = s.system->GetBodyInterface().CreateAndAddBody(settings, JPH::EActivation::DontActivate);
-	rememberBody(id, settings.mUserData);
+	JPH::BodyID id = addBody(settings, world, -1, JPH::EActivation::DontActivate);
 	s.actorBodies[actorid] = id;
 	s.actorWorlds[actorid] = world;
 	s.actorPositions[actorid] = position;

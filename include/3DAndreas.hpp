@@ -10,6 +10,7 @@
  * `nullptr` when 3DAndreas is not loaded. Every call reads the physics world
  * the server steps on its main thread, so it is made from that thread: in a
  * tick, an event or a native, never from a worker thread.
+ * This interface keeps its original ABI: its queries include every interior.
  */
 namespace A3D {
 

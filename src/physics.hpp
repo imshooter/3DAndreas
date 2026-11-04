@@ -29,6 +29,10 @@
 #include "routing.hpp"
 #include "walkmesh.hpp"
 
+namespace JPH {
+class BodyCreationSettings;
+}
+
 namespace physics {
 
 constexpr int InvalidPhys = -1;
@@ -119,6 +123,20 @@ enum class Sync {
 };
 
 /**
+ * `bodyContexts` uses Jolt body slots, so world and interior values need no packing or lookup.
+ * It is sized before simulation starts and only changed between physics steps.
+ */
+struct Context {
+	int world = -1;
+	int interior = -1;
+
+	bool matches(const Context& other) const {
+		return (world < 0 || other.world < 0 || world == other.world)
+			&& (interior < 0 || other.interior < 0 || interior == other.interior);
+	}
+};
+
+/**
  * @brief      A body created by a script: a moving object, a static object or a zone.
  *
  * `from`, `to`, `speed`, `sentAt` and `duration` describe the last move sent, and `turnedFrom` and
@@ -135,6 +153,7 @@ struct Body {
 	Kind kind = Kind::Object;
 	int modelid = -1;
 	int world = -1;
+	int interior = -1;
 	uint32_t collisions = CollideAll;
 	AMX* owner = nullptr;
 	float mass = 0.0f;
@@ -325,18 +344,21 @@ struct State {
 	std::unique_ptr<JPH::PhysicsSystem> system;
 	JPH::Ref<JPH::GroupFilter> worlds;
 	std::vector<uint64_t> userDataById;
+	std::vector<Context> bodyContexts;
 	std::vector<Body> bodies;
 	std::vector<int> freeBodies;
 	std::vector<int> accelerated;
 	std::vector<int> floating;
 	std::vector<JPH::BodyID> playerBodies;
 	std::vector<int> playerWorlds;
+	std::vector<int> playerInteriors;
 	std::vector<Vector3> playerSeen;
 	std::vector<double> playerSeenAt;
 	std::unordered_map<int, JPH::ShapeRefC> vehicleShapes;
 	std::vector<JPH::BodyID> vehicleBodies;
 	std::vector<int> vehicleModels;
 	std::vector<int> vehicleWorlds;
+	std::vector<int> vehicleInteriors;
 	std::vector<Vector3> vehiclePositions;
 	std::vector<glm::quat> vehicleRotations;
 	std::vector<double> vehicleSeenAt;
@@ -451,13 +473,14 @@ bool waterLevel(float x, float y, float& level);
 /**
  * @brief      Whether a point lies under the surface of the water with nothing of the map between
  *             them, so the pool of an interior placed in the sky does not fill the land below it.
+ *             Water has no interior metadata, so its occlusion includes every interior.
  */
-bool underWater(Vector3 point, float& level);
+bool underWater(Vector3 point, float& level, int world = -1);
 
 /**
  * @brief      Whether the map lies between two points.
  */
-bool mapBetween(Vector3 from, Vector3 to);
+bool mapBetween(Vector3 from, Vector3 to, int world = -1);
 
 /**
  * @brief      Where a segment first crosses the surface of the water, as a fraction of its length.
@@ -491,6 +514,8 @@ int buildMap();
  */
 bool mapHidden(uint32_t placement, int world);
 
+bool mapMatches(uint32_t placement, const Context& context);
+
 /**
  * @brief      The shape a model collides with when it stands still.
  *
@@ -509,13 +534,15 @@ JPH::ShapeRefC staticShape(int modelid);
 JPH::ShapeRefC dynamicShape(int modelid);
 
 /**
- * @brief      The collision group of a body: its virtual world, what it is, and what it collides with.
+ * @brief      The collision group of a body: its context slot, what it is, and what it collides with.
  *
- * @param      world       Virtual world, or `-1` for every world.
+ * @param      id          Body whose world and interior are stored in `bodyContexts`.
  * @param      kind        What the body stands for.
  * @param      collisions  What it collides with, from `CollideMap` to `CollidePlayers`.
  */
-JPH::CollisionGroup bodyGroup(int world, Kind kind, uint32_t collisions);
+JPH::CollisionGroup bodyGroup(const JPH::BodyID& id, Kind kind, uint32_t collisions);
+
+JPH::BodyID addBody(const JPH::BodyCreationSettings& settings, int world, int interior, JPH::EActivation activation);
 
 /**
  * @brief      Turn the rotation of a SA-MP object into a Jolt quaternion.
@@ -555,7 +582,7 @@ JPH::ObjectLayer playerLayer();
  * @return     - the index of the body
  *             - `InvalidPhys` the world is full
  */
-int createBody(AMX* owner, const JPH::Shape* shape, int modelid, Vector3 position, JPH::QuatArg rotation, float mass, int world, Kind kind, const ModelSettings* model = nullptr);
+int createBody(AMX* owner, const JPH::Shape* shape, int modelid, Vector3 position, JPH::QuatArg rotation, float mass, int world, int interior, Kind kind, const ModelSettings* model = nullptr);
 
 /**
  * @brief      Remove a body and the object it moves.
@@ -568,9 +595,11 @@ bool destroyBody(int index);
 Body* findBody(int index);
 
 /**
- * @brief      Give a body a new collision group after its world or its collisions changed.
+ * @brief      Refresh the context and collision mask of a body after either changed.
  */
 void regroupBody(Body& body);
+
+void wakeAround(const JPH::BodyID& id);
 
 /**
  * @brief      Push a body by a constant acceleration on every step, or stop pushing it.
@@ -712,18 +741,16 @@ struct QueryHit {
 };
 
 /**
- * @brief      Lets a query see the bodies of the kinds asked for in one virtual world, bodies of
- *             every world included, and never a zone, a removed map object or the bodies it leaves
- *             out.
+ * @brief      Filter bodies by kind, world and interior, with a negative value matching every
+ *             value of that dimension. Zones, removed map objects and excluded bodies never match.
  */
 class QueryFilter final : public JPH::BodyFilter {
 public:
-	QueryFilter(int world, uint32_t flags, JPH::BodyID first = JPH::BodyID(), JPH::BodyID second = JPH::BodyID());
+	QueryFilter(int world, uint32_t flags, int interior = -1, JPH::BodyID first = JPH::BodyID(), JPH::BodyID second = JPH::BodyID());
 	bool ShouldCollideLocked(const JPH::Body& body) const override;
 
 private:
-	int world_;
-	int64_t group_;
+	Context context_;
 	uint32_t flags_;
 	JPH::BodyID first_;
 	JPH::BodyID second_;
@@ -738,23 +765,23 @@ Vector3 toPoint(JPH::RVec3Arg point);
  * Triangles are hit from both sides, as the collision of the game is one sided. A segment that
  * starts inside a box, a sphere or a ped passes out of it unseen.
  */
-bool castRay(Vector3 from, Vector3 to, int world, uint32_t flags, bool normal, QueryHit& hit, JPH::BodyID first = JPH::BodyID(), JPH::BodyID second = JPH::BodyID());
+bool castRay(Vector3 from, Vector3 to, int world, uint32_t flags, bool normal, QueryHit& hit, int interior = -1, JPH::BodyID first = JPH::BodyID(), JPH::BodyID second = JPH::BodyID());
 
 /**
  * @brief      Whether anything of the kinds asked for lies between two points.
  */
-bool blocked(Vector3 from, Vector3 to, int world, uint32_t flags);
+bool blocked(Vector3 from, Vector3 to, int world, uint32_t flags, int interior = -1);
 
 /**
  * @brief      Where a sphere moved along a segment first touches something, as the centre of the
  *             sphere then.
  */
-bool sweepSphere(float radius, Vector3 from, Vector3 to, int world, uint32_t flags, QueryHit& hit);
+bool sweepSphere(float radius, Vector3 from, Vector3 to, int world, uint32_t flags, QueryHit& hit, int interior = -1);
 
 /**
  * @brief      Whether a shape placed at a transform touches anything of the kinds asked for.
  */
-bool touching(const JPH::Shape* shape, JPH::RMat44Arg transform, int world, uint32_t flags);
+bool touching(const JPH::Shape* shape, JPH::RMat44Arg transform, int world, uint32_t flags, int interior = -1);
 
 /**
  * @brief      Write ids nearest first into a Pawn array, as many as fit.

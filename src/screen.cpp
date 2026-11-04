@@ -67,7 +67,7 @@ bool onScreen(const View& view, Vector3 point, bool sight) {
 	if (!project(view, point, x, y) || x < 0.0f || x > ScreenWidth || y < 0.0f || y > ScreenHeight) {
 		return false;
 	}
-	return !sight || !blocked(view.position, point, view.world, CollideMap | CollideStatic);
+	return !sight || !blocked(view.position, point, view.world, CollideMap | CollideStatic, view.interior);
 }
 
 Vector3 throughScreen(const View& view, float x, float y) {
@@ -106,7 +106,7 @@ cell AMX_NATIVE_CALL A3D_GetScreenTarget(AMX* amx, const cell* params) {
 	ownBodies(*player, own, ride);
 	Vector3 end = view.position + throughScreen(view, readFloat(params, 2), readFloat(params, 3)) * readFloat(params, 10);
 	QueryHit hit;
-	if (!castRay(view.position, end, view.world, uint32_t(params[11]), false, hit, own, ride)) {
+	if (!castRay(view.position, end, view.world, uint32_t(params[11]), false, hit, view.interior, own, ride)) {
 		return false;
 	}
 	writeVector(amx, params, 4, toPoint(hit.point));

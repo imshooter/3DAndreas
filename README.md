@@ -1,7 +1,7 @@
 # 3DAndreas
 
 > [!NOTE]
-> 3DAndreas is experimental and already runs in production. Its natives may still change from one version to the next. It was made with Claude Opus 5.5, a model by [Anthropic](https://www.anthropic.com).
+> 3DAndreas is experimental and already runs in production. Its natives may still change from one version to the next. It was made with Claude Opus 5.5, a model by [Anthropic](https://www.anthropic.com), and Astra, a model by [OpenAI](https://openai.com).
 
 An open.mp component that simulates physics on the map of San Andreas with [Jolt Physics](https://github.com/jrouwe/JoltPhysics), answers questions about that map and finds routes across it: what a ray hits, where the ground is, whether two points see each other, what a shape overlaps, where the water lies, what a player has on screen, and the way to anywhere by road, by boat or on foot. It loads from the `components` folder, is configured in `config.json` and reads the map from a database built from the files of the game.
 
@@ -16,6 +16,7 @@ Physics objects moved by 3DAndreas, recorded in the game on an open.mp server. T
 - **Physics objects.** Spheres, boxes and objects shaped like a model fall, roll, bounce, float and push each other. Players see them as objects the component moves, with at most `max_updates` updates a second, so even a rain of hundreds of objects never floods a client. Static objects and zones never move and make walls, tables and goals.
 - **Model settings.** `models.json` gives the shape, mass, friction, bounce and more to 203 models, from balls to weapons, so `A3D_CreateObject(1946, x, y, z)` makes a basketball that bounces like one. Every other model gets a mass from its volume and a friction and bounce from what its collision is made of.
 - **World queries.** Rays give the point, the normal, the model and the surface of the game they hit. There are rays that return every hit, line of sight, ground height, sphere sweeps and the overlaps of a sphere, a box or a model.
+- **Worlds and interiors.** Bodies and queries belong to a virtual world and an interior, so two houses built on the same interior never touch. Players and vehicles follow theirs, the map keeps the interior of each of its pieces, and `A3D_SetInterior` moves a body to another one. The `interiorid` of every native is optional and `-1` means every interior, so older scripts work as before.
 - **Players, vehicles and actors.** Players on foot and actors are capsules and vehicles are boxes that move with them, so objects bounce off them and queries find them. A player pushes a pile of crates the way a person would, without throwing them. Searches in a sphere or a cone can require line of sight, and the camera of a player gives what they look at.
 - **The map.** Water levels, points under water or inside the collision of the map, free spots on the ground, predicted throws, the size and the `object.dat` data of models, and building removal for every virtual world or for one.
 - **The screen.** Where a point of the world shows on the screen of a player, and what a point of the screen shows, in text draw units.
@@ -100,7 +101,7 @@ The numbers change by about a fifth from one session to another on the same comp
 2. Extract it into the folder of the server. It holds `components/3DAndreas.dll`, `qawno/include/3DAndreas.inc`, `scriptfiles/3dandreas/world.db`, `scriptfiles/3dandreas/models.json` and `scriptfiles/3dandreas/navmesh.db`. The navigation mesh is optional and takes about 65 MB of memory, and the routes about 30 MB.
 3. Add `#include <3DAndreas>` to the scripts that use it, after `streamer.inc` when the script shows physics objects with streamer objects.
 
-Tested with open.mp 1.6.7 on Windows. Only a Windows build is available for now.
+Tested with open.mp 1.6.7 on Windows. The Linux build comes from the workflow of the repository and has not been tested on a server here yet.
 
 ## Usage
 
@@ -118,7 +119,7 @@ public OnPlayerCommandText(playerid, cmdtext[]) {
         ;
 
         GetPlayerPos(playerid, x, y, z);
-        ball = A3D_CreateSphere(1598, 0.3, x, y + 1.0, z + 1.0, 0.5, GetPlayerVirtualWorld(playerid));
+        ball = A3D_CreateSphere(1598, 0.3, x, y + 1.0, z + 1.0, 0.5, GetPlayerVirtualWorld(playerid), GetPlayerInterior(playerid));
         A3D_SetBounce(ball, 0.8);
         A3D_SetVelocity(ball, 0.0, 8.0, 4.0);
 
@@ -268,6 +269,8 @@ The scripts in [`tests`](tests) run as the main script, print what they check an
 | Script | What it checks |
 | --- | --- |
 | [`smoke.pwn`](tests/smoke.pwn) | A sphere, a box and a model shaped object dropped on the ground. |
+| [`interiors.pwn`](tests/interiors.pwn) | Worlds and interiors: bodies, the map, queries, zones, resting bodies, and players and vehicles changing interior. |
+| [`interiors-legacy.pwn`](tests/interiors-legacy.pwn) | The natives as 0.7.2 declared them, compiled with its include and run on the new component. |
 | [`features.pwn`](tests/features.pwn) | Zones, rolling friction, planar motion, gravity, acceleration, collision flags, cylinders and areas. |
 | [`streamer.pwn`](tests/streamer.pwn) | A box shown by a streamer object. Needs the streamer plugin. |
 | [`queries.pwn`](tests/queries.pwn) | Rays, ground, sight, sweeps, overlaps, worlds, bots and vehicles in shapes, and the cost of each native. |
@@ -281,6 +284,14 @@ The scripts in [`tests`](tests) run as the main script, print what they check an
 | [`routes.pwn`](tests/routes.pwn) | Routes of every type, their points, turns and progress, measures, the nearest place by road, ids that do not exist and the cost of each native. |
 | [`walks.pwn`](tests/walks.pwn) | The navigation mesh: walk points, random points, straight walks and walks. Needs `navmesh.db`. |
 | [`compare.pwn`](tests/compare.pwn) | The comparison of routes above. Needs samp-gps-plugin with its `GPS.dat`, and its `INVALID_PATH_ID` renamed, as it clashes with open.mp. |
+
+On Windows, `run-interiors.ps1` runs the interior tests in a new server in a temporary folder, on port 7819, with the compiler, components and `world.db` of the server given, and fails when a check fails:
+
+```powershell
+./tests/run-interiors.ps1 -ServerRoot C:/path/to/server -Library C:/path/to/build/Release/3DAndreas.dll
+```
+
+`-ContactCache` runs them with the contact cache on, and `-Test interiors-legacy -LegacyInclude` runs the old natives against a server that still holds the include of 0.7.2. Water decides what is under it in the world of the query and every interior, so a pool high in a building does not flood the street under its floor. The C++ interface checks every interior.
 
 ## Thanks to
 

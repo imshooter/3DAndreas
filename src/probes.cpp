@@ -22,7 +22,7 @@ constexpr float SpotLift = 0.05f;
 constexpr float TrajectoryStep = 1.0f / 30.0f;
 constexpr float FullTurn = 6.28318531f;
 
-bool firstSurface(Vector3 from, float reach, int world, bool& behind, float& distance) {
+bool firstSurface(Vector3 from, float reach, int world, int interior, bool& behind, float& distance) {
 	State& s = state();
 	JPH::RRayCast ray(toJoltPoint(from), JPH::Vec3(0.0f, 0.0f, reach));
 	JPH::RayCastSettings settings;
@@ -30,7 +30,7 @@ bool firstSurface(Vector3 from, float reach, int world, bool& behind, float& dis
 	settings.mBackFaceModeConvex = JPH::EBackFaceMode::IgnoreBackFaces;
 	settings.mTreatConvexAsSolid = false;
 	JPH::ClosestHitCollisionCollector<JPH::CastRayCollector> collector;
-	QueryFilter filter(world, CollideMap);
+	QueryFilter filter(world, CollideMap, interior);
 	s.system->GetNarrowPhaseQuery().CastRay(ray, settings, collector, {}, {}, filter);
 	if (!collector.HadHit()) {
 		return false;
@@ -45,10 +45,10 @@ bool firstSurface(Vector3 from, float reach, int world, bool& behind, float& dis
 	return true;
 }
 
-bool inSolidPart(Vector3 point, int world) {
+bool inSolidPart(Vector3 point, int world, int interior) {
 	State& s = state();
 	JPH::AllHitCollisionCollector<JPH::CollidePointCollector> collector;
-	QueryFilter filter(world, CollideMap);
+	QueryFilter filter(world, CollideMap, interior);
 	s.system->GetNarrowPhaseQuery().CollidePoint(toJoltPoint(point), collector, {}, {}, filter);
 	for (const JPH::CollidePointResult& result : collector.mHits) {
 		JPH::BodyLockRead lock(s.system->GetBodyLockInterface(), result.mBodyID);
@@ -67,18 +67,19 @@ bool inSolidPart(Vector3 point, int world) {
 cell AMX_NATIVE_CALL A3D_IsPointInsideMap(AMX* amx, const cell* params) {
 	Vector3 point = readVector(params, 1);
 	int world = params[5];
-	if (inSolidPart(point, world)) {
+	int interior = optional(params, 6, -1);
+	if (inSolidPart(point, world, interior)) {
 		writeFloat(amx, params[4], 0.0f);
 		return true;
 	}
 	bool behind = false;
 	float above = 0.0f;
-	if (!firstSurface(point, ProbeReach, world, behind, above) || !behind) {
+	if (!firstSurface(point, ProbeReach, world, interior, behind, above) || !behind) {
 		return false;
 	}
 	bool under = false;
 	float below = 0.0f;
-	if (firstSurface(point, -ProbeReach, world, under, below) && !under) {
+	if (firstSurface(point, -ProbeReach, world, interior, under, below) && !under) {
 		return false;
 	}
 	writeFloat(amx, params[4], above);
@@ -92,6 +93,7 @@ cell AMX_NATIVE_CALL A3D_FindRandomPoint(AMX* amx, const cell* params) {
 	float height = readFloat(params, 8);
 	float clearance = readFloat(params, 9);
 	int world = params[10];
+	int interior = optional(params, 11, -1);
 	if (height <= 0.0f || clearance < 0.0f) {
 		return false;
 	}
@@ -101,7 +103,7 @@ cell AMX_NATIVE_CALL A3D_FindRandomPoint(AMX* amx, const cell* params) {
 		float distance = radius * std::sqrt(unit(s.random));
 		Vector3 column(centre.x + std::cos(angle) * distance, centre.y + std::sin(angle) * distance, centre.z);
 		QueryHit hit;
-		if (!castRay(column + Vector3(0.0f, 0.0f, height), column - Vector3(0.0f, 0.0f, height), world, CollideMap | CollideStatic, true, hit)) {
+		if (!castRay(column + Vector3(0.0f, 0.0f, height), column - Vector3(0.0f, 0.0f, height), world, CollideMap | CollideStatic, true, hit, interior)) {
 			continue;
 		}
 		if (hit.normal.GetZ() < MinimumUpright) {
@@ -109,14 +111,14 @@ cell AMX_NATIVE_CALL A3D_FindRandomPoint(AMX* amx, const cell* params) {
 		}
 		Vector3 ground = toPoint(hit.point);
 		float level;
-		if (underWater(ground + Vector3(0.0f, 0.0f, SpotLift), level)) {
+		if (underWater(ground + Vector3(0.0f, 0.0f, SpotLift), level, world)) {
 			continue;
 		}
 		if (clearance > 0.0f) {
 			JPH::SphereShape sphere(clearance);
 			sphere.SetEmbedded();
 			JPH::RVec3 resting = hit.point + hit.normal * (clearance + SpotLift);
-			if (touching(&sphere, JPH::RMat44::sTranslation(resting), world, CollideAll)) {
+			if (touching(&sphere, JPH::RMat44::sTranslation(resting), world, CollideAll, interior)) {
 				continue;
 			}
 		}
@@ -134,6 +136,7 @@ cell AMX_NATIVE_CALL A3D_PredictTrajectory(AMX* amx, const cell* params) {
 	float duration = readFloat(params, 16);
 	int world = params[17];
 	uint32_t flags = uint32_t(params[18]);
+	int interior = optional(params, 19, -1);
 	if (duration <= 0.0f) {
 		return false;
 	}
@@ -143,7 +146,7 @@ cell AMX_NATIVE_CALL A3D_PredictTrajectory(AMX* amx, const cell* params) {
 		float next = std::min(time + TrajectoryStep, duration);
 		Vector3 to = start + velocity * next - Vector3(0.0f, 0.0f, 0.5f * gravity * next * next);
 		QueryHit hit;
-		bool met = radius > 0.0f ? sweepSphere(radius, from, to, world, flags, hit) : castRay(from, to, world, flags, false, hit);
+		bool met = radius > 0.0f ? sweepSphere(radius, from, to, world, flags, hit, interior) : castRay(from, to, world, flags, false, hit, interior);
 		if (met) {
 			Vector3 point = toPoint(hit.point);
 			float covered = glm::length(to - from);

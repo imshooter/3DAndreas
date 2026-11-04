@@ -19,6 +19,12 @@
  * moved with them, so physics objects bounce off them and queries find them. `3dandreas.vehicles`
  * set to `false` in config.json leaves vehicles out.
  *
+ * Bodies and queries belong to a virtual world and an interior, `-1` meaning every one. Players,
+ * vehicles and the camera follow theirs, and each piece of the map keeps the interior of the game.
+ * Actors, water and ColAndreas databases have no interior and match every one. This decides what
+ * collides, not what players see, so an object seen in one interior only is a streamer object
+ * with the same world and interior.
+ *
  * The screen of a player comes from the camera their client last sent on foot: where it is, where
  * it looks, its field of view and the aspect ratio of the screen. Screen coordinates are the 640 by
  * 448 units of text draws, from the top left corner.
@@ -172,115 +178,121 @@ enum A3D_TURN {
  * comes from the model: the mass from the volume of its shape and the density of what most of its
  * collision is made of, the friction and bounce from that material.
  *
- * @param      modelid  Model shown, and whose collision gives the shape.
- * @param      x        Position on the X axis.
- * @param      y        Position on the Y axis.
- * @param      z        Position on the Z axis.
- * @param      rx       Rotation on the X axis.
- * @param      ry       Rotation on the Y axis.
- * @param      rz       Rotation on the Z axis.
- * @param      mass     Mass in kilograms, or `0.0` for the mass in `models.json`, or else the one
- *                      the model gives from its volume.
- * @param      worldid  Virtual world it collides in, or `-1` for every world.
+ * @param      modelid     Model shown, and whose collision gives the shape.
+ * @param      x           Position on the X axis.
+ * @param      y           Position on the Y axis.
+ * @param      z           Position on the Z axis.
+ * @param      rx          Rotation on the X axis.
+ * @param      ry          Rotation on the Y axis.
+ * @param      rz          Rotation on the Z axis.
+ * @param      mass        Mass in kilograms, or `0.0` for the mass in `models.json`, or else the one
+ *                         the model gives from its volume.
+ * @param      worldid     Virtual world it collides in, or `-1` for every world.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - the physics object
  *             - `INVALID_PHYSIC_ID` the model has no collision and no shape in `models.json`, or
  *               the world is full
  */
-native Physic:A3D_CreateObject(modelid, Float:x, Float:y, Float:z, Float:rx = 0.0, Float:ry = 0.0, Float:rz = 0.0, Float:mass = 0.0, worldid = -1);
+native Physic:A3D_CreateObject(modelid, Float:x, Float:y, Float:z, Float:rx = 0.0, Float:ry = 0.0, Float:rz = 0.0, Float:mass = 0.0, worldid = -1, interiorid = -1);
 
 /**
  * @brief      Create a moving physics object shaped like a sphere.
  *
- * @param      modelid  Model shown, or `-1` for none.
- * @param      radius   Radius of the sphere.
- * @param      x        Position on the X axis.
- * @param      y        Position on the Y axis.
- * @param      z        Position on the Z axis.
- * @param      mass     Mass in kilograms.
- * @param      worldid  Virtual world it collides in, or `-1` for every world.
+ * @param      modelid     Model shown, or `-1` for none.
+ * @param      radius      Radius of the sphere.
+ * @param      x           Position on the X axis.
+ * @param      y           Position on the Y axis.
+ * @param      z           Position on the Z axis.
+ * @param      mass        Mass in kilograms.
+ * @param      worldid     Virtual world it collides in, or `-1` for every world.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - the physics object
  *             - `INVALID_PHYSIC_ID` the radius is not positive, or the world is full
  */
-native Physic:A3D_CreateSphere(modelid, Float:radius, Float:x, Float:y, Float:z, Float:mass = 1.0, worldid = -1);
+native Physic:A3D_CreateSphere(modelid, Float:radius, Float:x, Float:y, Float:z, Float:mass = 1.0, worldid = -1, interiorid = -1);
 
 /**
  * @brief      Create a moving physics object shaped like a box.
  *
- * @param      modelid  Model shown, or `-1` for none.
- * @param      sizeX    Size on the X axis.
- * @param      sizeY    Size on the Y axis.
- * @param      sizeZ    Size on the Z axis.
- * @param      x        Position on the X axis.
- * @param      y        Position on the Y axis.
- * @param      z        Position on the Z axis.
- * @param      rx       Rotation on the X axis.
- * @param      ry       Rotation on the Y axis.
- * @param      rz       Rotation on the Z axis.
- * @param      mass     Mass in kilograms.
- * @param      worldid  Virtual world it collides in, or `-1` for every world.
+ * @param      modelid     Model shown, or `-1` for none.
+ * @param      sizeX       Size on the X axis.
+ * @param      sizeY       Size on the Y axis.
+ * @param      sizeZ       Size on the Z axis.
+ * @param      x           Position on the X axis.
+ * @param      y           Position on the Y axis.
+ * @param      z           Position on the Z axis.
+ * @param      rx          Rotation on the X axis.
+ * @param      ry          Rotation on the Y axis.
+ * @param      rz          Rotation on the Z axis.
+ * @param      mass        Mass in kilograms.
+ * @param      worldid     Virtual world it collides in, or `-1` for every world.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - the physics object
  *             - `INVALID_PHYSIC_ID` a size is not positive, or the world is full
  */
-native Physic:A3D_CreateBox(modelid, Float:sizeX, Float:sizeY, Float:sizeZ, Float:x, Float:y, Float:z, Float:rx = 0.0, Float:ry = 0.0, Float:rz = 0.0, Float:mass = 1.0, worldid = -1);
+native Physic:A3D_CreateBox(modelid, Float:sizeX, Float:sizeY, Float:sizeZ, Float:x, Float:y, Float:z, Float:rx = 0.0, Float:ry = 0.0, Float:rz = 0.0, Float:mass = 1.0, worldid = -1, interiorid = -1);
 
 /**
  * @brief      Create a physics object that never moves, shaped like the collision of a model.
  *
  * Nothing is shown. Use it under an object created by the script.
  *
- * @param      modelid  Model whose collision gives the shape.
- * @param      x        Position on the X axis.
- * @param      y        Position on the Y axis.
- * @param      z        Position on the Z axis.
- * @param      rx       Rotation on the X axis.
- * @param      ry       Rotation on the Y axis.
- * @param      rz       Rotation on the Z axis.
- * @param      worldid  Virtual world it collides in, or `-1` for every world.
+ * @param      modelid     Model whose collision gives the shape.
+ * @param      x           Position on the X axis.
+ * @param      y           Position on the Y axis.
+ * @param      z           Position on the Z axis.
+ * @param      rx          Rotation on the X axis.
+ * @param      ry          Rotation on the Y axis.
+ * @param      rz          Rotation on the Z axis.
+ * @param      worldid     Virtual world it collides in, or `-1` for every world.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - the physics object
  *             - `INVALID_PHYSIC_ID` the model has no collision, or the world is full
  */
-native Physic:A3D_CreateStaticObject(modelid, Float:x, Float:y, Float:z, Float:rx = 0.0, Float:ry = 0.0, Float:rz = 0.0, worldid = -1);
+native Physic:A3D_CreateStaticObject(modelid, Float:x, Float:y, Float:z, Float:rx = 0.0, Float:ry = 0.0, Float:rz = 0.0, worldid = -1, interiorid = -1);
 
 /**
  * @brief      Create an invisible box that never moves, such as a wall or a floor.
  *
- * @param      sizeX    Size on the X axis.
- * @param      sizeY    Size on the Y axis.
- * @param      sizeZ    Size on the Z axis.
- * @param      x        Position on the X axis.
- * @param      y        Position on the Y axis.
- * @param      z        Position on the Z axis.
- * @param      rx       Rotation on the X axis.
- * @param      ry       Rotation on the Y axis.
- * @param      rz       Rotation on the Z axis.
- * @param      worldid  Virtual world it collides in, or `-1` for every world.
+ * @param      sizeX       Size on the X axis.
+ * @param      sizeY       Size on the Y axis.
+ * @param      sizeZ       Size on the Z axis.
+ * @param      x           Position on the X axis.
+ * @param      y           Position on the Y axis.
+ * @param      z           Position on the Z axis.
+ * @param      rx          Rotation on the X axis.
+ * @param      ry          Rotation on the Y axis.
+ * @param      rz          Rotation on the Z axis.
+ * @param      worldid     Virtual world it collides in, or `-1` for every world.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - the physics object
  *             - `INVALID_PHYSIC_ID` a size is not positive, or the world is full
  */
-native Physic:A3D_CreateStaticBox(Float:sizeX, Float:sizeY, Float:sizeZ, Float:x, Float:y, Float:z, Float:rx = 0.0, Float:ry = 0.0, Float:rz = 0.0, worldid = -1);
+native Physic:A3D_CreateStaticBox(Float:sizeX, Float:sizeY, Float:sizeZ, Float:x, Float:y, Float:z, Float:rx = 0.0, Float:ry = 0.0, Float:rz = 0.0, worldid = -1, interiorid = -1);
 
 /**
  * @brief      Create an invisible upright cylinder that never moves, such as a pillar.
  *
- * @param      radius   Radius of the cylinder.
- * @param      height   Height of the cylinder.
- * @param      x        Position of its centre on the X axis.
- * @param      y        Position of its centre on the Y axis.
- * @param      z        Position of its centre on the Z axis.
- * @param      rx       Rotation on the X axis.
- * @param      ry       Rotation on the Y axis.
- * @param      rz       Rotation on the Z axis.
- * @param      worldid  Virtual world it collides in, or `-1` for every world.
+ * @param      radius      Radius of the cylinder.
+ * @param      height      Height of the cylinder.
+ * @param      x           Position of its centre on the X axis.
+ * @param      y           Position of its centre on the Y axis.
+ * @param      z           Position of its centre on the Z axis.
+ * @param      rx          Rotation on the X axis.
+ * @param      ry          Rotation on the Y axis.
+ * @param      rz          Rotation on the Z axis.
+ * @param      worldid     Virtual world it collides in, or `-1` for every world.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - the physics object
  *             - `INVALID_PHYSIC_ID` the radius or the height is not positive, or the world is full
  */
-native Physic:A3D_CreateStaticCylinder(Float:radius, Float:height, Float:x, Float:y, Float:z, Float:rx = 0.0, Float:ry = 0.0, Float:rz = 0.0, worldid = -1);
+native Physic:A3D_CreateStaticCylinder(Float:radius, Float:height, Float:x, Float:y, Float:z, Float:rx = 0.0, Float:ry = 0.0, Float:rz = 0.0, worldid = -1, interiorid = -1);
 
 /**
  * @brief      Create a box shaped zone that reports moving physics objects entering and leaving it.
@@ -288,35 +300,37 @@ native Physic:A3D_CreateStaticCylinder(Float:radius, Float:height, Float:x, Floa
  * A zone stops nothing. `A3D_OnEntered` and `A3D_OnLeft` are called in the script that created it.
  * An object that comes to rest inside the zone stays inside it until it moves out.
  *
- * @param      sizeX    Size on the X axis.
- * @param      sizeY    Size on the Y axis.
- * @param      sizeZ    Size on the Z axis.
- * @param      x        Position on the X axis.
- * @param      y        Position on the Y axis.
- * @param      z        Position on the Z axis.
- * @param      rx       Rotation on the X axis.
- * @param      ry       Rotation on the Y axis.
- * @param      rz       Rotation on the Z axis.
- * @param      worldid  Virtual world it watches, or `-1` for every world.
+ * @param      sizeX       Size on the X axis.
+ * @param      sizeY       Size on the Y axis.
+ * @param      sizeZ       Size on the Z axis.
+ * @param      x           Position on the X axis.
+ * @param      y           Position on the Y axis.
+ * @param      z           Position on the Z axis.
+ * @param      rx          Rotation on the X axis.
+ * @param      ry          Rotation on the Y axis.
+ * @param      rz          Rotation on the Z axis.
+ * @param      worldid     Virtual world it watches, or `-1` for every world.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - the zone
  *             - `INVALID_PHYSIC_ID` a size is not positive, or the world is full
  */
-native Physic:A3D_CreateZone(Float:sizeX, Float:sizeY, Float:sizeZ, Float:x, Float:y, Float:z, Float:rx = 0.0, Float:ry = 0.0, Float:rz = 0.0, worldid = -1);
+native Physic:A3D_CreateZone(Float:sizeX, Float:sizeY, Float:sizeZ, Float:x, Float:y, Float:z, Float:rx = 0.0, Float:ry = 0.0, Float:rz = 0.0, worldid = -1, interiorid = -1);
 
 /**
  * @brief      Create a sphere shaped zone that reports moving physics objects entering and leaving it.
  *
- * @param      radius   Radius of the sphere.
- * @param      x        Position on the X axis.
- * @param      y        Position on the Y axis.
- * @param      z        Position on the Z axis.
- * @param      worldid  Virtual world it watches, or `-1` for every world.
+ * @param      radius      Radius of the sphere.
+ * @param      x           Position on the X axis.
+ * @param      y           Position on the Y axis.
+ * @param      z           Position on the Z axis.
+ * @param      worldid     Virtual world it watches, or `-1` for every world.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - the zone
  *             - `INVALID_PHYSIC_ID` the radius is not positive, or the world is full
  */
-native Physic:A3D_CreateZoneSphere(Float:radius, Float:x, Float:y, Float:z, worldid = -1);
+native Physic:A3D_CreateZoneSphere(Float:radius, Float:x, Float:y, Float:z, worldid = -1, interiorid = -1);
 
 /**
  * @brief      Destroy a physics object, a static object or a zone, and the global object that shows it.
@@ -499,6 +513,28 @@ native bool:A3D_SetWorld(Physic:physicid, worldid);
  *             - `-1` `physicid` is not a physics object
  */
 native A3D_GetWorld(Physic:physicid);
+
+/**
+ * @brief      Move a physics object, a static object or a zone to another interior. A streamer
+ *             object shown with it keeps its own interior.
+ *
+ * @param      physicid    Physics object to move.
+ * @param      interiorid  Interior, or `-1` for every interior.
+ *
+ * @return     - `true` it was moved
+ *             - `false` `physicid` is not a physics object
+ */
+native bool:A3D_SetInterior(Physic:physicid, interiorid);
+
+/**
+ * @brief      The interior of a physics object.
+ *
+ * @param      physicid  Physics object to read.
+ *
+ * @return     - the interior, `-1` for every interior
+ *             - `-1` `physicid` is not a physics object
+ */
+native A3D_GetInterior(Physic:physicid);
 
 /**
  * @brief      The position of a physics object.
@@ -697,99 +733,103 @@ native bool:A3D_GetStats(&active, &updates, &Float:milliseconds);
  * Zones are never hit, players only on foot, and a segment that starts inside a box, a sphere, a
  * player or a vehicle leaves it unseen.
  *
- * @param      startX   Start of the segment on the X axis.
- * @param      startY   Start on the Y axis.
- * @param      startZ   Start on the Z axis.
- * @param      endX     End of the segment on the X axis.
- * @param      endY     End on the Y axis.
- * @param      endZ     End on the Z axis.
- * @param      x        Point hit on the X axis.
- * @param      y        Point hit on the Y axis.
- * @param      z        Point hit on the Z axis.
- * @param      type     What was hit.
- * @param      hitid     Model of the map object, or the physics object, static object, player,
- *                       vehicle or actor hit.
- * @param      material  Surface of the game hit, see `A3D_GetMaterialName`.
- * @param      worldid   Virtual world to look in, or `-1` for every world.
- * @param      flags     What the segment may hit.
+ * @param      startX      Start of the segment on the X axis.
+ * @param      startY      Start on the Y axis.
+ * @param      startZ      Start on the Z axis.
+ * @param      endX        End of the segment on the X axis.
+ * @param      endY        End on the Y axis.
+ * @param      endZ        End on the Z axis.
+ * @param      x           Point hit on the X axis.
+ * @param      y           Point hit on the Y axis.
+ * @param      z           Point hit on the Z axis.
+ * @param      type        What was hit.
+ * @param      hitid       Model of the map object, or the physics object, static object, player,
+ *                         vehicle or actor hit.
+ * @param      material    Surface of the game hit, see `A3D_GetMaterialName`.
+ * @param      worldid     Virtual world to look in, or `-1` for every world.
+ * @param      flags       What the segment may hit.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - `true` something was hit
  *             - `false` the segment is clear
  */
-native bool:A3D_RayCast(Float:startX, Float:startY, Float:startZ, Float:endX, Float:endY, Float:endZ, &Float:x, &Float:y, &Float:z, &A3D_HIT:type = A3D_HIT_MAP, &hitid = 0, &material = 0, worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_ALL);
+native bool:A3D_RayCast(Float:startX, Float:startY, Float:startZ, Float:endX, Float:endY, Float:endZ, &Float:x, &Float:y, &Float:z, &A3D_HIT:type = A3D_HIT_MAP, &hitid = 0, &material = 0, worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_ALL, interiorid = -1);
 
 /**
  * @brief      Find the first thing a segment hits, and the direction its surface faces there.
  *
  * The normal points towards the start of the segment. A flat floor gives `0.0`, `0.0`, `1.0`.
  *
- * @param      startX   Start of the segment on the X axis.
- * @param      startY   Start on the Y axis.
- * @param      startZ   Start on the Z axis.
- * @param      endX     End of the segment on the X axis.
- * @param      endY     End on the Y axis.
- * @param      endZ     End on the Z axis.
- * @param      x        Point hit on the X axis.
- * @param      y        Point hit on the Y axis.
- * @param      z        Point hit on the Z axis.
- * @param      normalX  Normal of the surface on the X axis.
- * @param      normalY  Normal on the Y axis.
- * @param      normalZ  Normal on the Z axis.
- * @param      type     What was hit.
- * @param      hitid     Model of the map object, or the physics object, static object, player,
- *                       vehicle or actor hit.
- * @param      material  Surface of the game hit, see `A3D_GetMaterialName`.
- * @param      worldid   Virtual world to look in, or `-1` for every world.
- * @param      flags     What the segment may hit.
+ * @param      startX      Start of the segment on the X axis.
+ * @param      startY      Start on the Y axis.
+ * @param      startZ      Start on the Z axis.
+ * @param      endX        End of the segment on the X axis.
+ * @param      endY        End on the Y axis.
+ * @param      endZ        End on the Z axis.
+ * @param      x           Point hit on the X axis.
+ * @param      y           Point hit on the Y axis.
+ * @param      z           Point hit on the Z axis.
+ * @param      normalX     Normal of the surface on the X axis.
+ * @param      normalY     Normal on the Y axis.
+ * @param      normalZ     Normal on the Z axis.
+ * @param      type        What was hit.
+ * @param      hitid       Model of the map object, or the physics object, static object, player,
+ *                         vehicle or actor hit.
+ * @param      material    Surface of the game hit, see `A3D_GetMaterialName`.
+ * @param      worldid     Virtual world to look in, or `-1` for every world.
+ * @param      flags       What the segment may hit.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - `true` something was hit
  *             - `false` the segment is clear
  */
-native bool:A3D_RayCastNormal(Float:startX, Float:startY, Float:startZ, Float:endX, Float:endY, Float:endZ, &Float:x, &Float:y, &Float:z, &Float:normalX, &Float:normalY, &Float:normalZ, &A3D_HIT:type = A3D_HIT_MAP, &hitid = 0, &material = 0, worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_ALL);
+native bool:A3D_RayCastNormal(Float:startX, Float:startY, Float:startZ, Float:endX, Float:endY, Float:endZ, &Float:x, &Float:y, &Float:z, &Float:normalX, &Float:normalY, &Float:normalZ, &A3D_HIT:type = A3D_HIT_MAP, &hitid = 0, &material = 0, worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_ALL, interiorid = -1);
 
 /**
  * @brief      Find everything a segment hits, nearest first.
  *
  * A model the segment goes through is hit where it enters and where it leaves.
  *
- * @param      startX   Start of the segment on the X axis.
- * @param      startY   Start on the Y axis.
- * @param      startZ   Start on the Z axis.
- * @param      endX     End of the segment on the X axis.
- * @param      endY     End on the Y axis.
- * @param      endZ     End on the Z axis.
- * @param      x        Points hit on the X axis.
- * @param      y        Points hit on the Y axis.
- * @param      z        Points hit on the Z axis.
- * @param      types      What each point hit.
- * @param      hitids     What each point hit, as the `hitid` of `A3D_RayCast`.
- * @param      materials  Surface of the game at each point.
- * @param      size       Room in each array.
- * @param      worldid    Virtual world to look in, or `-1` for every world.
- * @param      flags      What the segment may hit.
+ * @param      startX      Start of the segment on the X axis.
+ * @param      startY      Start on the Y axis.
+ * @param      startZ      Start on the Z axis.
+ * @param      endX        End of the segment on the X axis.
+ * @param      endY        End on the Y axis.
+ * @param      endZ        End on the Z axis.
+ * @param      x           Points hit on the X axis.
+ * @param      y           Points hit on the Y axis.
+ * @param      z           Points hit on the Z axis.
+ * @param      types       What each point hit.
+ * @param      hitids      What each point hit, as the `hitid` of `A3D_RayCast`.
+ * @param      materials   Surface of the game at each point.
+ * @param      size        Room in each array.
+ * @param      worldid     Virtual world to look in, or `-1` for every world.
+ * @param      flags       What the segment may hit.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - the number of points written
  */
-native A3D_RayCastAll(Float:startX, Float:startY, Float:startZ, Float:endX, Float:endY, Float:endZ, Float:x[], Float:y[], Float:z[], A3D_HIT:types[], hitids[], materials[], size = sizeof (x), worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_ALL);
+native A3D_RayCastAll(Float:startX, Float:startY, Float:startZ, Float:endX, Float:endY, Float:endZ, Float:x[], Float:y[], Float:z[], A3D_HIT:types[], hitids[], materials[], size = sizeof (x), worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_ALL, interiorid = -1);
 
 /**
  * @brief      Whether nothing stands between two points.
  *
  * Stops at the first thing found, so it is cheaper than `A3D_RayCast`.
  *
- * @param      x1       First point on the X axis.
- * @param      y1       First point on the Y axis.
- * @param      z1       First point on the Z axis.
- * @param      x2       Second point on the X axis.
- * @param      y2       Second point on the Y axis.
- * @param      z2       Second point on the Z axis.
- * @param      worldid  Virtual world to look in, or `-1` for every world.
- * @param      flags    What blocks the sight, the map and static objects by default.
+ * @param      x1          First point on the X axis.
+ * @param      y1          First point on the Y axis.
+ * @param      z1          First point on the Z axis.
+ * @param      x2          Second point on the X axis.
+ * @param      y2          Second point on the Y axis.
+ * @param      z2          Second point on the Z axis.
+ * @param      worldid     Virtual world to look in, or `-1` for every world.
+ * @param      flags       What blocks the sight, the map and static objects by default.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - `true` the points see each other
  *             - `false` something stands between them
  */
-native bool:A3D_IsLineOfSight(Float:x1, Float:y1, Float:z1, Float:x2, Float:y2, Float:z2, worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_MAP | A3D_COLLIDE_STATIC);
+native bool:A3D_IsLineOfSight(Float:x1, Float:y1, Float:z1, Float:x2, Float:y2, Float:z2, worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_MAP | A3D_COLLIDE_STATIC, interiorid = -1);
 
 /**
  * @brief      Find the ground under a point.
@@ -797,18 +837,19 @@ native bool:A3D_IsLineOfSight(Float:x1, Float:y1, Float:z1, Float:x2, Float:y2, 
  * Looks down from the point, so under a bridge or inside a building it finds the floor below and
  * not the roof above.
  *
- * @param      x        Point on the X axis.
- * @param      y        Point on the Y axis.
- * @param      z        Point on the Z axis, where the search starts.
- * @param      groundZ  Height of the ground.
- * @param      worldid  Virtual world to look in, or `-1` for every world.
- * @param      flags    What counts as ground, the map and static objects by default.
- * @param      depth    How far down to look.
+ * @param      x           Point on the X axis.
+ * @param      y           Point on the Y axis.
+ * @param      z           Point on the Z axis, where the search starts.
+ * @param      groundZ     Height of the ground.
+ * @param      worldid     Virtual world to look in, or `-1` for every world.
+ * @param      flags       What counts as ground, the map and static objects by default.
+ * @param      depth       How far down to look.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - `true` the ground was found
  *             - `false` nothing lies below within `depth`
  */
-native bool:A3D_FindGround(Float:x, Float:y, Float:z, &Float:groundZ, worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_MAP | A3D_COLLIDE_STATIC, Float:depth = 1000.0);
+native bool:A3D_FindGround(Float:x, Float:y, Float:z, &Float:groundZ, worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_MAP | A3D_COLLIDE_STATIC, Float:depth = 1000.0, interiorid = -1);
 
 /**
  * @brief      Move a sphere along a segment and find where it first touches something.
@@ -816,66 +857,69 @@ native bool:A3D_FindGround(Float:x, Float:y, Float:z, &Float:groundZ, worldid = 
  * Like `A3D_RayCast` for something with a size: a camera that must not enter walls, or a spot
  * where a thrown object would stop.
  *
- * @param      radius   Radius of the sphere.
- * @param      startX   Start of its centre on the X axis.
- * @param      startY   Start on the Y axis.
- * @param      startZ   Start on the Z axis.
- * @param      endX     End of its centre on the X axis.
- * @param      endY     End on the Y axis.
- * @param      endZ     End on the Z axis.
- * @param      x        Centre where it stops on the X axis, or the end when nothing is touched.
- * @param      y        Centre on the Y axis.
- * @param      z        Centre on the Z axis.
- * @param      type     What it touched.
- * @param      hitid     Model of the map object, or the physics object, static object, player,
- *                       vehicle or actor touched.
- * @param      material  Surface of the game touched, see `A3D_GetMaterialName`.
- * @param      worldid   Virtual world to look in, or `-1` for every world.
- * @param      flags     What the sphere may touch.
+ * @param      radius      Radius of the sphere.
+ * @param      startX      Start of its centre on the X axis.
+ * @param      startY      Start on the Y axis.
+ * @param      startZ      Start on the Z axis.
+ * @param      endX        End of its centre on the X axis.
+ * @param      endY        End on the Y axis.
+ * @param      endZ        End on the Z axis.
+ * @param      x           Centre where it stops on the X axis, or the end when nothing is touched.
+ * @param      y           Centre on the Y axis.
+ * @param      z           Centre on the Z axis.
+ * @param      type        What it touched.
+ * @param      hitid       Model of the map object, or the physics object, static object, player,
+ *                         vehicle or actor touched.
+ * @param      material    Surface of the game touched, see `A3D_GetMaterialName`.
+ * @param      worldid     Virtual world to look in, or `-1` for every world.
+ * @param      flags       What the sphere may touch.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - `true` the sphere touched something
  *             - `false` it reached the end, or the radius is not positive
  */
-native bool:A3D_SweepSphere(Float:radius, Float:startX, Float:startY, Float:startZ, Float:endX, Float:endY, Float:endZ, &Float:x, &Float:y, &Float:z, &A3D_HIT:type = A3D_HIT_MAP, &hitid = 0, &material = 0, worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_ALL);
+native bool:A3D_SweepSphere(Float:radius, Float:startX, Float:startY, Float:startZ, Float:endX, Float:endY, Float:endZ, &Float:x, &Float:y, &Float:z, &A3D_HIT:type = A3D_HIT_MAP, &hitid = 0, &material = 0, worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_ALL, interiorid = -1);
 
 /**
  * @brief      Find everything a sphere overlaps.
  *
- * @param      x        Centre on the X axis.
- * @param      y        Centre on the Y axis.
- * @param      z        Centre on the Z axis.
- * @param      radius   Radius of the sphere.
- * @param      types    What each thing found is.
- * @param      hitids   What each thing found is, as the `hitid` of `A3D_RayCast`.
- * @param      size     Room in each array.
- * @param      worldid  Virtual world to look in, or `-1` for every world.
- * @param      flags    What may be found.
+ * @param      x           Centre on the X axis.
+ * @param      y           Centre on the Y axis.
+ * @param      z           Centre on the Z axis.
+ * @param      radius      Radius of the sphere.
+ * @param      types       What each thing found is.
+ * @param      hitids      What each thing found is, as the `hitid` of `A3D_RayCast`.
+ * @param      size        Room in each array.
+ * @param      worldid     Virtual world to look in, or `-1` for every world.
+ * @param      flags       What may be found.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - the number of things written
  */
-native A3D_OverlapSphere(Float:x, Float:y, Float:z, Float:radius, A3D_HIT:types[], hitids[], size = sizeof (hitids), worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_ALL);
+native A3D_OverlapSphere(Float:x, Float:y, Float:z, Float:radius, A3D_HIT:types[], hitids[], size = sizeof (hitids), worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_ALL, interiorid = -1);
 
 /**
  * @brief      Find everything a box overlaps, such as the room a vehicle or an object needs.
  *
- * @param      sizeX    Size on the X axis.
- * @param      sizeY    Size on the Y axis.
- * @param      sizeZ    Size on the Z axis.
- * @param      x        Centre on the X axis.
- * @param      y        Centre on the Y axis.
- * @param      z        Centre on the Z axis.
- * @param      rx       Rotation on the X axis.
- * @param      ry       Rotation on the Y axis.
- * @param      rz       Rotation on the Z axis.
- * @param      types    What each thing found is.
- * @param      hitids   What each thing found is, as the `hitid` of `A3D_RayCast`.
- * @param      size     Room in each array.
- * @param      worldid  Virtual world to look in, or `-1` for every world.
- * @param      flags    What may be found.
+ * @param      sizeX       Size on the X axis.
+ * @param      sizeY       Size on the Y axis.
+ * @param      sizeZ       Size on the Z axis.
+ * @param      x           Centre on the X axis.
+ * @param      y           Centre on the Y axis.
+ * @param      z           Centre on the Z axis.
+ * @param      rx          Rotation on the X axis.
+ * @param      ry          Rotation on the Y axis.
+ * @param      rz          Rotation on the Z axis.
+ * @param      types       What each thing found is.
+ * @param      hitids      What each thing found is, as the `hitid` of `A3D_RayCast`.
+ * @param      size        Room in each array.
+ * @param      worldid     Virtual world to look in, or `-1` for every world.
+ * @param      flags       What may be found.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - the number of things written
  */
-native A3D_OverlapBox(Float:sizeX, Float:sizeY, Float:sizeZ, Float:x, Float:y, Float:z, Float:rx, Float:ry, Float:rz, A3D_HIT:types[], hitids[], size = sizeof (hitids), worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_ALL);
+native A3D_OverlapBox(Float:sizeX, Float:sizeY, Float:sizeZ, Float:x, Float:y, Float:z, Float:rx, Float:ry, Float:rz, A3D_HIT:types[], hitids[], size = sizeof (hitids), worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_ALL, interiorid = -1);
 
 /**
  * @brief      Find everything a model would overlap at a position, such as before placing an object.
@@ -883,23 +927,24 @@ native A3D_OverlapBox(Float:sizeX, Float:sizeY, Float:sizeZ, Float:x, Float:y, F
  * The model counts as the shape it moves with: the shape `models.json` gives it, or the convex
  * hull of its collision, which covers the gaps of a hollow model.
  *
- * @param      modelid  Model to place.
- * @param      x        Position on the X axis.
- * @param      y        Position on the Y axis.
- * @param      z        Position on the Z axis.
- * @param      rx       Rotation on the X axis.
- * @param      ry       Rotation on the Y axis.
- * @param      rz       Rotation on the Z axis.
- * @param      types    What each thing found is.
- * @param      hitids   What each thing found is, as the `hitid` of `A3D_RayCast`.
- * @param      size     Room in each array.
- * @param      worldid  Virtual world to look in, or `-1` for every world.
- * @param      flags    What may be found.
+ * @param      modelid     Model to place.
+ * @param      x           Position on the X axis.
+ * @param      y           Position on the Y axis.
+ * @param      z           Position on the Z axis.
+ * @param      rx          Rotation on the X axis.
+ * @param      ry          Rotation on the Y axis.
+ * @param      rz          Rotation on the Z axis.
+ * @param      types       What each thing found is.
+ * @param      hitids      What each thing found is, as the `hitid` of `A3D_RayCast`.
+ * @param      size        Room in each array.
+ * @param      worldid     Virtual world to look in, or `-1` for every world.
+ * @param      flags       What may be found.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - the number of things written
  *             - `0` the model has no collision and no shape in `models.json`
  */
-native A3D_OverlapModel(modelid, Float:x, Float:y, Float:z, Float:rx, Float:ry, Float:rz, A3D_HIT:types[], hitids[], size = sizeof (hitids), worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_ALL);
+native A3D_OverlapModel(modelid, Float:x, Float:y, Float:z, Float:rx, Float:ry, Float:rz, A3D_HIT:types[], hitids[], size = sizeof (hitids), worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_ALL, interiorid = -1);
 
 /**
  * @brief      Whether a model would touch anything at a position.
@@ -907,21 +952,22 @@ native A3D_OverlapModel(modelid, Float:x, Float:y, Float:z, Float:rx, Float:ry, 
  * Stops at the first thing found, so it is cheaper than `A3D_OverlapModel`. The model counts as
  * the shape it moves with, like in `A3D_OverlapModel`.
  *
- * @param      modelid  Model to place.
- * @param      x        Position on the X axis.
- * @param      y        Position on the Y axis.
- * @param      z        Position on the Z axis.
- * @param      rx       Rotation on the X axis.
- * @param      ry       Rotation on the Y axis.
- * @param      rz       Rotation on the Z axis.
- * @param      worldid  Virtual world to look in, or `-1` for every world.
- * @param      flags    What may be touched.
+ * @param      modelid     Model to place.
+ * @param      x           Position on the X axis.
+ * @param      y           Position on the Y axis.
+ * @param      z           Position on the Z axis.
+ * @param      rx          Rotation on the X axis.
+ * @param      ry          Rotation on the Y axis.
+ * @param      rz          Rotation on the Z axis.
+ * @param      worldid     Virtual world to look in, or `-1` for every world.
+ * @param      flags       What may be touched.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - `true` it would touch something
  *             - `false` the place is free, or the model has no collision and no shape in
  *               `models.json`
  */
-native bool:A3D_IsModelColliding(modelid, Float:x, Float:y, Float:z, Float:rx = 0.0, Float:ry = 0.0, Float:rz = 0.0, worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_ALL);
+native bool:A3D_IsModelColliding(modelid, Float:x, Float:y, Float:z, Float:rx = 0.0, Float:ry = 0.0, Float:rz = 0.0, worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_ALL, interiorid = -1);
 
 /**
  * @brief      Find the players within a distance of a point, nearest first.
@@ -1032,16 +1078,17 @@ native A3D_GetActorsInCone(Float:x, Float:y, Float:z, Float:directionX, Float:di
  * The push is `force` at the centre and fades to nothing at `radius`. Objects behind a wall are
  * pushed too.
  *
- * @param      x        Centre on the X axis.
- * @param      y        Centre on the Y axis.
- * @param      z        Centre on the Z axis.
- * @param      radius   Distance the explosion reaches.
- * @param      force    Impulse at the centre, in kilograms times metres per second.
- * @param      worldid  Virtual world of the explosion, or `-1` for every world.
+ * @param      x           Centre on the X axis.
+ * @param      y           Centre on the Y axis.
+ * @param      z           Centre on the Z axis.
+ * @param      radius      Distance the explosion reaches.
+ * @param      force       Impulse at the centre, in kilograms times metres per second.
+ * @param      worldid     Virtual world of the explosion, or `-1` for every world.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - the number of objects pushed
  */
-native A3D_CreateExplosion(Float:x, Float:y, Float:z, Float:radius, Float:force, worldid = -1);
+native A3D_CreateExplosion(Float:x, Float:y, Float:z, Float:radius, Float:force, worldid = -1, interiorid = -1);
 
 /**
  * @brief      Find what a player looks at, from their camera.
@@ -1072,17 +1119,18 @@ native bool:A3D_GetPlayerTarget(playerid, &Float:x, &Float:y, &Float:z, &A3D_HIT
  * point under a bridge, a roof or the floor of an interior placed in the sky is in the open. A
  * point in a box or a sphere of the map is inside.
  *
- * @param      x        Point on the X axis.
- * @param      y        Point on the Y axis.
- * @param      z        Point on the Z axis.
- * @param      depth    How far under the surface above it the point lies, `0.0` in a box or a
- *                      sphere.
- * @param      worldid  Virtual world, for the map objects removed in it, or `-1` for every world.
+ * @param      x           Point on the X axis.
+ * @param      y           Point on the Y axis.
+ * @param      z           Point on the Z axis.
+ * @param      depth       How far under the surface above it the point lies, `0.0` in a box or a
+ *                         sphere.
+ * @param      worldid     Virtual world, for the map objects removed in it, or `-1` for every world.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - `true` the point is inside the map
  *             - `false` it is in the open
  */
-native bool:A3D_IsPointInsideMap(Float:x, Float:y, Float:z, &Float:depth = 0.0, worldid = -1);
+native bool:A3D_IsPointInsideMap(Float:x, Float:y, Float:z, &Float:depth = 0.0, worldid = -1, interiorid = -1);
 
 /**
  * @brief      Find a random spot on the ground around a point where something fits, such as a spawn
@@ -1091,22 +1139,23 @@ native bool:A3D_IsPointInsideMap(Float:x, Float:y, Float:z, &Float:depth = 0.0, 
  * The spot lies on ground that faces up within 45 degrees, out of the water, with room for a sphere
  * of `clearance` resting on it, free of the map and of every kind of body.
  *
- * @param      x          Centre on the X axis.
- * @param      y          Centre on the Y axis.
- * @param      z          Centre on the Z axis.
- * @param      radius     Distance from the centre to look within.
- * @param      spotX      Spot found on the X axis.
- * @param      spotY      Spot found on the Y axis.
- * @param      spotZ      Height of the ground at the spot.
- * @param      height     How far above and below `z` the ground is looked for. Inside a building it
- *                        must stay under the ceiling.
- * @param      clearance  Radius of the room needed.
- * @param      worldid    Virtual world to look in, or `-1` for every world.
+ * @param      x           Centre on the X axis.
+ * @param      y           Centre on the Y axis.
+ * @param      z           Centre on the Z axis.
+ * @param      radius      Distance from the centre to look within.
+ * @param      spotX       Spot found on the X axis.
+ * @param      spotY       Spot found on the Y axis.
+ * @param      spotZ       Height of the ground at the spot.
+ * @param      height      How far above and below `z` the ground is looked for. Inside a building it
+ *                         must stay under the ceiling.
+ * @param      clearance   Radius of the room needed.
+ * @param      worldid     Virtual world to look in, or `-1` for every world.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - `true` a spot was found
  *             - `false` none of 16 tries found one
  */
-native bool:A3D_FindRandomPoint(Float:x, Float:y, Float:z, Float:radius, &Float:spotX, &Float:spotY, &Float:spotZ, Float:height = 5.0, Float:clearance = 0.5, worldid = -1);
+native bool:A3D_FindRandomPoint(Float:x, Float:y, Float:z, Float:radius, &Float:spotX, &Float:spotY, &Float:spotZ, Float:height = 5.0, Float:clearance = 0.5, worldid = -1, interiorid = -1);
 
 /**
  * @brief      Follow something thrown, such as a grenade, and find where it first lands.
@@ -1115,30 +1164,31 @@ native bool:A3D_FindRandomPoint(Float:x, Float:y, Float:z, Float:radius, &Float:
  * sphere of that size is followed and the point is its centre when it touches. Start outside the
  * thrower, or leave `A3D_COLLIDE_PLAYERS` out of `flags`.
  *
- * @param      x         Start on the X axis.
- * @param      y         Start on the Y axis.
- * @param      z         Start on the Z axis.
- * @param      vx        Speed on the X axis, in metres per second.
- * @param      vy        Speed on the Y axis.
- * @param      vz        Speed on the Z axis.
- * @param      hitX      Point where it lands on the X axis.
- * @param      hitY      Point on the Y axis.
- * @param      hitZ      Point on the Z axis.
- * @param      time      Seconds it flies.
- * @param      type      What it lands on.
- * @param      hitid     Model of the map object, or the physics object, static object, player,
- *                       vehicle or actor.
- * @param      material  Surface of the game it lands on.
- * @param      radius    Radius of what is thrown, or `0.0` for a point.
- * @param      gravity   Gravity in metres per second squared.
- * @param      duration  Longest flight followed, in seconds.
- * @param      worldid   Virtual world to look in, or `-1` for every world.
- * @param      flags     What it may land on.
+ * @param      x           Start on the X axis.
+ * @param      y           Start on the Y axis.
+ * @param      z           Start on the Z axis.
+ * @param      vx          Speed on the X axis, in metres per second.
+ * @param      vy          Speed on the Y axis.
+ * @param      vz          Speed on the Z axis.
+ * @param      hitX        Point where it lands on the X axis.
+ * @param      hitY        Point on the Y axis.
+ * @param      hitZ        Point on the Z axis.
+ * @param      time        Seconds it flies.
+ * @param      type        What it lands on.
+ * @param      hitid       Model of the map object, or the physics object, static object, player,
+ *                         vehicle or actor.
+ * @param      material    Surface of the game it lands on.
+ * @param      radius      Radius of what is thrown, or `0.0` for a point.
+ * @param      gravity     Gravity in metres per second squared.
+ * @param      duration    Longest flight followed, in seconds.
+ * @param      worldid     Virtual world to look in, or `-1` for every world.
+ * @param      flags       What it may land on.
+ * @param      interiorid  Interior it applies to, or `-1` for every interior.
  *
  * @return     - `true` it lands within `duration`
  *             - `false` it flies on, or falls below `3dandreas.floor`
  */
-native bool:A3D_PredictTrajectory(Float:x, Float:y, Float:z, Float:vx, Float:vy, Float:vz, &Float:hitX, &Float:hitY, &Float:hitZ, &Float:time = 0.0, &A3D_HIT:type = A3D_HIT_MAP, &hitid = 0, &material = 0, Float:radius = 0.0, Float:gravity = 9.81, Float:duration = 10.0, worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_ALL);
+native bool:A3D_PredictTrajectory(Float:x, Float:y, Float:z, Float:vx, Float:vy, Float:vz, &Float:hitX, &Float:hitY, &Float:hitZ, &Float:time = 0.0, &A3D_HIT:type = A3D_HIT_MAP, &hitid = 0, &material = 0, Float:radius = 0.0, Float:gravity = 9.81, Float:duration = 10.0, worldid = -1, A3D_COLLIDE:flags = A3D_COLLIDE_ALL, interiorid = -1);
 
 /**
  * @brief      Find where a point of the world shows on the screen of a player.
@@ -1264,16 +1314,17 @@ native A3D_GetActorsOnScreen(playerid, actors[], size = sizeof (actors), bool:si
  * A removal may hold for one virtual world only. Physics objects resting on a removed map object
  * wake up and fall.
  *
- * @param      modelid  Model to remove, or `-1` for every model.
- * @param      x        Centre on the X axis.
- * @param      y        Centre on the Y axis.
- * @param      z        Centre on the Z axis.
- * @param      radius   Distance from the centre to the position of the map objects.
- * @param      worldid  Virtual world they are removed in, or `-1` for every world.
+ * @param      modelid     Model to remove, or `-1` for every model.
+ * @param      x           Centre on the X axis.
+ * @param      y           Centre on the Y axis.
+ * @param      z           Centre on the Z axis.
+ * @param      radius      Distance from the centre to the position of the map objects.
+ * @param      worldid     Virtual world they are removed in, or `-1` for every world.
+ * @param      interiorid  IPL interior of the placements, or `-1` for every interior.
  *
  * @return     - the number of map objects removed
  */
-native A3D_RemoveBuilding(modelid, Float:x, Float:y, Float:z, Float:radius, worldid = -1);
+native A3D_RemoveBuilding(modelid, Float:x, Float:y, Float:z, Float:radius, worldid = -1, interiorid = -1);
 
 /**
  * @brief      Bring back map objects removed by `A3D_RemoveBuilding`.
@@ -1281,16 +1332,17 @@ native A3D_RemoveBuilding(modelid, Float:x, Float:y, Float:z, Float:radius, worl
  * Restoring for every world undoes every removal of a map object. A map object removed for every
  * world comes back only when it is restored for every world.
  *
- * @param      modelid  Model to bring back, or `-1` for every model.
- * @param      x        Centre on the X axis.
- * @param      y        Centre on the Y axis.
- * @param      z        Centre on the Z axis.
- * @param      radius   Distance from the centre to the position of the map objects.
- * @param      worldid  Virtual world they come back in, or `-1` for every world.
+ * @param      modelid     Model to bring back, or `-1` for every model.
+ * @param      x           Centre on the X axis.
+ * @param      y           Centre on the Y axis.
+ * @param      z           Centre on the Z axis.
+ * @param      radius      Distance from the centre to the position of the map objects.
+ * @param      worldid     Virtual world they come back in, or `-1` for every world.
+ * @param      interiorid  IPL interior of the placements, or `-1` for every interior.
  *
  * @return     - the number of map objects brought back
  */
-native A3D_RestoreBuilding(modelid, Float:x, Float:y, Float:z, Float:radius, worldid = -1);
+native A3D_RestoreBuilding(modelid, Float:x, Float:y, Float:z, Float:radius, worldid = -1, interiorid = -1);
 
 /**
  * @brief      Find the height of the water at a point of the map.
@@ -1311,17 +1363,19 @@ native bool:A3D_GetWaterLevel(Float:x, Float:y, &Float:level);
  * @brief      Whether a point lies in the water of the map.
  *
  * The point must be under the surface with nothing of the map between them, so the pool of an
- * interior placed above the city does not flood the streets below it.
+ * interior placed above the city does not flood the streets below it. Water has no interior
+ * metadata, so this occlusion includes the map geometry of every interior.
  *
- * @param      x      Point on the X axis.
- * @param      y      Point on the Y axis.
- * @param      z      Point on the Z axis.
- * @param      depth  How far under the surface the point lies.
+ * @param      x        Point on the X axis.
+ * @param      y        Point on the Y axis.
+ * @param      z        Point on the Z axis.
+ * @param      depth    How far under the surface the point lies.
+ * @param      worldid  World of the map geometry above the point, or `-1` for every world.
  *
  * @return     - `true` the point is in water
  *             - `false` it is not, or the database has no water
  */
-native bool:A3D_IsPointInWater(Float:x, Float:y, Float:z, &Float:depth = 0.0);
+native bool:A3D_IsPointInWater(Float:x, Float:y, Float:z, &Float:depth = 0.0, worldid = -1);
 
 /**
  * @brief      Find the box that holds a model, around its position.
@@ -1939,20 +1993,21 @@ native bool:A3D_WalkRayCast(Float:fromX, Float:fromY, Float:fromZ, Float:toX, Fl
 /**
  * @brief      Create four walls around a rectangle on the ground.
  *
- * @param      minX     West edge.
- * @param      minY     South edge.
- * @param      maxX     East edge.
- * @param      maxY     North edge.
- * @param      minZ     Bottom of the walls.
- * @param      maxZ     Top of the walls.
- * @param      walls    The four walls created, south, north, west and east.
- * @param      worldid  Virtual world they collide in, or `-1` for every world.
- * @param      width    Thickness of each wall, outside the rectangle.
+ * @param      minX        West edge.
+ * @param      minY        South edge.
+ * @param      maxX        East edge.
+ * @param      maxY        North edge.
+ * @param      minZ        Bottom of the walls.
+ * @param      maxZ        Top of the walls.
+ * @param      walls       The four walls created, south, north, west and east.
+ * @param      worldid     Virtual world they collide in, or `-1` for every world.
+ * @param      width       Thickness of each wall, outside the rectangle.
+ * @param      interiorid  Interior they collide in, or `-1` for every interior.
  *
  * @return     - `true` the four walls were created
  *             - `false` the rectangle is empty, or the world is full
  */
-stock bool:A3D_CreateArea(Float:minX, Float:minY, Float:maxX, Float:maxY, Float:minZ, Float:maxZ, Physic:walls[4], worldid = -1, Float:width = 0.2) {
+stock bool:A3D_CreateArea(Float:minX, Float:minY, Float:maxX, Float:maxY, Float:minZ, Float:maxZ, Physic:walls[4], worldid = -1, Float:width = 0.2, interiorid = -1) {
     if (maxX <= minX || maxY <= minY || maxZ <= minZ) {
         return false;
     }
@@ -1966,10 +2021,10 @@ stock bool:A3D_CreateArea(Float:minX, Float:minY, Float:maxX, Float:maxY, Float:
         Float:centreZ = (minZ + maxZ) / 2.0
     ;
 
-    walls[0] = A3D_CreateStaticBox(sizeX, width, height, centreX, minY - width / 2.0, centreZ, 0.0, 0.0, 0.0, worldid);
-    walls[1] = A3D_CreateStaticBox(sizeX, width, height, centreX, maxY + width / 2.0, centreZ, 0.0, 0.0, 0.0, worldid);
-    walls[2] = A3D_CreateStaticBox(width, sizeY, height, minX - width / 2.0, centreY, centreZ, 0.0, 0.0, 0.0, worldid);
-    walls[3] = A3D_CreateStaticBox(width, sizeY, height, maxX + width / 2.0, centreY, centreZ, 0.0, 0.0, 0.0, worldid);
+    walls[0] = A3D_CreateStaticBox(sizeX, width, height, centreX, minY - width / 2.0, centreZ, 0.0, 0.0, 0.0, worldid, interiorid);
+    walls[1] = A3D_CreateStaticBox(sizeX, width, height, centreX, maxY + width / 2.0, centreZ, 0.0, 0.0, 0.0, worldid, interiorid);
+    walls[2] = A3D_CreateStaticBox(width, sizeY, height, minX - width / 2.0, centreY, centreZ, 0.0, 0.0, 0.0, worldid, interiorid);
+    walls[3] = A3D_CreateStaticBox(width, sizeY, height, maxX + width / 2.0, centreY, centreZ, 0.0, 0.0, 0.0, worldid, interiorid);
 
     for (new i; i != 4; ++i) {
         if (walls[i] == INVALID_PHYSIC_ID) {

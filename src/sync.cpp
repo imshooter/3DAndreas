@@ -67,7 +67,7 @@ float freeShare(const JPH::BodyID& id, const Body& body, JPH::Vec3Arg motion) {
 	JPH::RShapeCast cast = JPH::RShapeCast::sFromWorldTransform(shape, JPH::Vec3::sReplicate(1.0f), transform, motion);
 	JPH::ShapeCastSettings settings;
 	FirstImpact impact(motion);
-	QueryFilter filter(body.world, body.collisions, id);
+	QueryFilter filter(body.world, body.collisions, body.interior, id);
 	s.system->GetNarrowPhaseQuery().CastShape(cast, settings, transform.GetTranslation(), impact, {}, {}, filter);
 	return impact.share;
 }
