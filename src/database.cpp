@@ -15,6 +15,19 @@ constexpr char Magic[4] = { 'P', 'H', 'D', 'B' };
 constexpr uint32_t Version = 2;
 constexpr uint32_t FirstVersion = 1;
 constexpr uint16_t ColAndreasVersion = 2;
+constexpr size_t SurfaceRecord = 14;
+constexpr size_t SphereRecord = 17;
+constexpr size_t BoxRecord = 25;
+constexpr size_t VertexRecord = 6;
+constexpr size_t FaceRecord = 7;
+constexpr size_t PlacementRecord = 32;
+constexpr size_t WaterRecord = 49;
+constexpr size_t NodeRecord = 14;
+constexpr size_t LinkRecord = 10;
+constexpr size_t ColAndreasSphereRecord = 16;
+constexpr size_t ColAndreasBoxRecord = 24;
+constexpr size_t ColAndreasFaceRecord = 36;
+constexpr size_t ColAndreasPlacementRecord = 30;
 
 class Reader {
 public:
@@ -30,6 +43,10 @@ public:
 		std::memcpy(&value, data_.data() + at_, sizeof(T));
 		at_ += sizeof(T);
 		return true;
+	}
+
+	bool holds(uint64_t count, size_t record) const {
+		return count <= (data_.size() - at_) / record;
 	}
 
 	bool read(std::string& text) {
@@ -69,27 +86,40 @@ private:
 	std::vector<char> data_;
 };
 
+template <typename... T>
+bool finite(T... values) {
+	return (std::isfinite(values) && ...);
+}
+
 bool readGraph(Reader& reader, PathGraph& graph) {
 	uint32_t nodes;
 	uint32_t links;
 	if (!reader.read(nodes) || !reader.read(links)) {
 		return false;
 	}
+	if (!reader.holds(uint64_t(nodes) * NodeRecord + (uint64_t(nodes) + 1) * sizeof(uint32_t) + uint64_t(links) * LinkRecord, 1)) {
+		return false;
+	}
 	graph.nodes.resize(nodes);
 	graph.first.resize(size_t(nodes) + 1);
 	graph.links.resize(links);
 	for (PathNode& node : graph.nodes) {
-		if (!reader.read(node.x) || !reader.read(node.y) || !reader.read(node.z) || !reader.read(node.flags) || !reader.read(node.width)) {
+		if (!reader.read(node.x) || !reader.read(node.y) || !reader.read(node.z) || !reader.read(node.flags) || !reader.read(node.width) || !finite(node.x, node.y, node.z)) {
 			return false;
 		}
 	}
+	uint32_t previous = 0;
 	for (uint32_t& first : graph.first) {
-		if (!reader.read(first) || first > links) {
+		if (!reader.read(first) || first < previous || first > links) {
 			return false;
 		}
+		previous = first;
+	}
+	if (graph.first.front() != 0 || graph.first.back() != links) {
+		return false;
 	}
 	for (PathLink& link : graph.links) {
-		if (!reader.read(link.target) || !reader.read(link.length) || !reader.read(link.lanes) || !reader.read(link.flags) || link.target >= nodes) {
+		if (!reader.read(link.target) || !reader.read(link.length) || !reader.read(link.lanes) || !reader.read(link.flags) || link.target >= nodes || !finite(link.length)) {
 			return false;
 		}
 	}
@@ -174,6 +204,9 @@ bool readOwn(Reader& reader, Database& database) {
 	if (!reader.read(surfaces) || !reader.read(models) || !reader.read(placements) || !reader.read(waters)) {
 		return false;
 	}
+	if (!reader.holds(surfaces, SurfaceRecord)) {
+		return false;
+	}
 	database.surfaces.resize(surfaces);
 	for (Surface& surface : database.surfaces) {
 		if (!reader.read(surface.name) || !reader.read(surface.group) || !reader.read(surface.tyreGrip) || !reader.read(surface.wetGrip) || !reader.read(surface.flags)) {
@@ -197,6 +230,9 @@ bool readOwn(Reader& reader, Database& database) {
 		if (!reader.read(spheres) || !reader.read(boxes) || !reader.read(vertices) || !reader.read(faces)) {
 			return false;
 		}
+		if (!reader.holds(uint64_t(spheres) * SphereRecord + uint64_t(boxes) * BoxRecord + uint64_t(vertices) * VertexRecord + uint64_t(faces) * FaceRecord, 1)) {
+			return false;
+		}
 		model.spheres.resize(spheres);
 		model.boxes.resize(boxes);
 		model.vertices.resize(vertices);
@@ -205,9 +241,15 @@ bool readOwn(Reader& reader, Database& database) {
 			if (!reader.read(sphere.x) || !reader.read(sphere.y) || !reader.read(sphere.z) || !reader.read(sphere.radius) || !reader.read(sphere.material)) {
 				return false;
 			}
+			if (!finite(sphere.x, sphere.y, sphere.z, sphere.radius)) {
+				return false;
+			}
 		}
 		for (Box& box : model.boxes) {
 			if (!reader.read(box.minX) || !reader.read(box.minY) || !reader.read(box.minZ) || !reader.read(box.maxX) || !reader.read(box.maxY) || !reader.read(box.maxZ) || !reader.read(box.material)) {
+				return false;
+			}
+			if (!finite(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ)) {
 				return false;
 			}
 		}
@@ -226,6 +268,9 @@ bool readOwn(Reader& reader, Database& database) {
 		}
 		database.models[modelid] = std::move(model);
 	}
+	if (!reader.holds(placements, PlacementRecord)) {
+		return false;
+	}
 	database.placements.resize(placements);
 	for (Placement& placement : database.placements) {
 		uint16_t modelid;
@@ -240,14 +285,28 @@ bool readOwn(Reader& reader, Database& database) {
 		if (!reader.read(placement.qx) || !reader.read(placement.qy) || !reader.read(placement.qz) || !reader.read(placement.qw)) {
 			return false;
 		}
+		if (!finite(placement.x, placement.y, placement.z, placement.qx, placement.qy, placement.qz, placement.qw)) {
+			return false;
+		}
 		placement.modelid = modelid;
 		placement.interior = interior;
+	}
+	if (!reader.holds(waters, WaterRecord)) {
+		return false;
 	}
 	database.waters.resize(waters);
 	for (Water& water : database.waters) {
 		uint8_t corners;
 		if (!reader.read(corners) || !reader.read(water.x) || !reader.read(water.y) || !reader.read(water.z)) {
 			return false;
+		}
+		if (corners != 3 && corners != 4) {
+			return false;
+		}
+		for (int corner = 0; corner != corners; ++corner) {
+			if (!finite(water.x[corner], water.y[corner], water.z[corner])) {
+				return false;
+			}
 		}
 		water.corners = corners;
 	}
@@ -272,10 +331,13 @@ bool readColAndreas(Reader& reader, Database& database) {
 		if (!reader.read(modelid) || !reader.read(spheres) || !reader.read(boxes) || !reader.read(faces)) {
 			return false;
 		}
+		if (!reader.holds(uint64_t(spheres) * ColAndreasSphereRecord + uint64_t(boxes) * ColAndreasBoxRecord + uint64_t(faces) * ColAndreasFaceRecord, 1)) {
+			return false;
+		}
 		Model model;
 		model.spheres.resize(spheres);
 		for (Sphere& sphere : model.spheres) {
-			if (!reader.read(sphere.x) || !reader.read(sphere.y) || !reader.read(sphere.z) || !reader.read(sphere.radius)) {
+			if (!reader.read(sphere.x) || !reader.read(sphere.y) || !reader.read(sphere.z) || !reader.read(sphere.radius) || !finite(sphere.x, sphere.y, sphere.z, sphere.radius)) {
 				return false;
 			}
 		}
@@ -283,7 +345,7 @@ bool readColAndreas(Reader& reader, Database& database) {
 		for (Box& box : model.boxes) {
 			float centre[3];
 			float half[3];
-			if (!reader.read(centre) || !reader.read(half)) {
+			if (!reader.read(centre) || !reader.read(half) || !finite(centre[0], centre[1], centre[2], half[0], half[1], half[2])) {
 				return false;
 			}
 			box.minX = centre[0] - std::abs(half[0]);
@@ -298,7 +360,7 @@ bool readColAndreas(Reader& reader, Database& database) {
 		model.faces.reserve(faces);
 		for (uint16_t face = 0; face != faces; ++face) {
 			float corners[9];
-			if (!reader.read(corners)) {
+			if (!reader.read(corners) || !finite(corners[0], corners[1], corners[2], corners[3], corners[4], corners[5], corners[6], corners[7], corners[8])) {
 				return false;
 			}
 			uint16_t indices[3];
@@ -319,6 +381,9 @@ bool readColAndreas(Reader& reader, Database& database) {
 		model.bounds = measureModel(model);
 		database.models[modelid] = std::move(model);
 	}
+	if (!reader.holds(placements, ColAndreasPlacementRecord)) {
+		return false;
+	}
 	database.placements.resize(placements);
 	for (Placement& placement : database.placements) {
 		uint16_t modelid;
@@ -326,6 +391,9 @@ bool readColAndreas(Reader& reader, Database& database) {
 			return false;
 		}
 		if (!reader.read(placement.qx) || !reader.read(placement.qy) || !reader.read(placement.qz) || !reader.read(placement.qw)) {
+			return false;
+		}
+		if (!finite(placement.x, placement.y, placement.z, placement.qx, placement.qy, placement.qz, placement.qw)) {
 			return false;
 		}
 		placement.modelid = modelid;
