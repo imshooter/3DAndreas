@@ -272,6 +272,7 @@ The scripts in [`tests`](tests) run as the main script, print what they check an
 | [`interiors.pwn`](tests/interiors.pwn) | Worlds and interiors: bodies, the map, queries, zones, resting bodies, and players and vehicles changing interior. |
 | [`interiors-legacy.pwn`](tests/interiors-legacy.pwn) | The natives as 0.7.2 declared them, compiled with its include and run on the new component. |
 | [`water.pwn`](tests/water.pwn) | A sphere touching the sea and an indoor pool with its surface, falling, rising, thrown or starting across it. |
+| [`optimization.pwn`](tests/optimization.pwn) | The time of long and random water rays, sphere sweeps and dense overlaps, with checksums to compare two builds. |
 | [`features.pwn`](tests/features.pwn) | Zones, rolling friction, planar motion, gravity, acceleration, collision flags, cylinders and areas. |
 | [`streamer.pwn`](tests/streamer.pwn) | A box shown by a streamer object. Needs the streamer plugin. |
 | [`queries.pwn`](tests/queries.pwn) | Rays, ground, sight, sweeps, overlaps, worlds, bots and vehicles in shapes, and the cost of each native. |

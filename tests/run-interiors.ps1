@@ -64,7 +64,7 @@ if (!$process.WaitForExit(45000)) {
     throw "Test server timed out: $testRoot"
 }
 $output = Get-Content -LiteralPath (Join-Path $testRoot 'stdout.log') -Raw
-$output -split '\r?\n' | Where-Object { $_ -match '\[interiors\]|\[water\]|\[queries\]|\[groups\]|\[vehicles\]|\[smoke\]|3DAndreas|error|warning' } | Write-Output
+$output -split '\r?\n' | Where-Object { $_ -match '\[interiors\]|\[water\]|\[queries\]|\[groups\]|\[vehicles\]|\[smoke\]|\[optimization\]|\[rolling\]|3DAndreas|error|warning' } | Write-Output
 $tag = ($Test -split '-')[0]
 $result = [regex]::Match($output, "\[$tag\] DONE checks (\d+) failures (\d+)")
 $counted = (Get-Content -LiteralPath (Join-Path $PSScriptRoot "$Test.pwn") -Raw) -match 'DONE checks'

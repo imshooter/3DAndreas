@@ -13,6 +13,7 @@ constexpr float WaterCell = 100.0f;
 constexpr float LinearDrag = 0.5f;
 constexpr float AngularDrag = 0.01f;
 constexpr float Edge = 0.00001f;
+constexpr float CornerTime = 0.000001f;
 
 bool overTriangle(const Water& water, int a, int b, int c, float x, float y, float& level) {
 	float across = (water.y[b] - water.y[c]) * (water.x[a] - water.x[c]) + (water.x[c] - water.x[b]) * (water.y[a] - water.y[c]);
@@ -157,39 +158,80 @@ bool waterAlong(Vector3 from, Vector3 to, float& fraction, float radius) {
 			found = true;
 		}
 	}
-	int firstColumn = int(std::floor((std::min(from.x, to.x) - s.waterMinX) / WaterCell));
-	int lastColumn = int(std::floor((std::max(from.x, to.x) - s.waterMinX) / WaterCell));
-	int firstRow = int(std::floor((std::min(from.y, to.y) - s.waterMinY) / WaterCell));
-	int lastRow = int(std::floor((std::max(from.y, to.y) - s.waterMinY) / WaterCell));
-	if (lastColumn < 0 || lastRow < 0 || firstColumn >= s.waterColumns || firstRow >= s.waterRows) {
+	if (std::min(from.x, to.x) >= maxX || std::min(from.y, to.y) >= maxY || std::max(from.x, to.x) < s.waterMinX || std::max(from.y, to.y) < s.waterMinY) {
 		return found;
 	}
-	firstColumn = std::max(firstColumn, 0);
-	firstRow = std::max(firstRow, 0);
-	lastColumn = std::min(lastColumn, s.waterColumns - 1);
-	lastRow = std::min(lastRow, s.waterRows - 1);
+	float enter = 0.0f;
+	float leave = 1.0f;
+	auto clip = [&](float start, float distance, float low, float high) {
+		if (distance == 0.0f) {
+			return start >= low && start < high;
+		}
+		float first = (low - start) / distance;
+		float last = (high - start) / distance;
+		if (first > last) {
+			std::swap(first, last);
+		}
+		enter = std::max(enter, first);
+		leave = std::min(leave, last);
+		return enter <= leave;
+	};
+	if (!clip(from.x, delta.x, s.waterMinX, maxX) || !clip(from.y, delta.y, s.waterMinY, maxY)) {
+		return found;
+	}
+	Vector3 entry = from + delta * enter;
+	int column = std::clamp(int(std::floor((entry.x - s.waterMinX) / WaterCell)), 0, s.waterColumns - 1);
+	int row = std::clamp(int(std::floor((entry.y - s.waterMinY) / WaterCell)), 0, s.waterRows - 1);
+	int stepX = (delta.x > 0.0f) - (delta.x < 0.0f);
+	int stepY = (delta.y > 0.0f) - (delta.y < 0.0f);
+	float nextX = stepX == 0 ? INFINITY : (s.waterMinX + float(column + (stepX > 0)) * WaterCell - from.x) / delta.x;
+	float nextY = stepY == 0 ? INFINITY : (s.waterMinY + float(row + (stepY > 0)) * WaterCell - from.y) / delta.y;
+	float strideX = stepX == 0 ? INFINITY : WaterCell / std::abs(delta.x);
+	float strideY = stepY == 0 ? INFINITY : WaterCell / std::abs(delta.y);
 	std::vector<uint8_t> tested(s.waters.size(), 0);
-	for (int row = firstRow; row <= lastRow; ++row) {
-		for (int column = firstColumn; column <= lastColumn; ++column) {
-			for (int index : s.waterCells[size_t(row) * size_t(s.waterColumns) + size_t(column)]) {
-				if (tested[size_t(index)] != 0) {
-					continue;
+	auto visit = [&](int cellX, int cellY) {
+		if (cellX < 0 || cellY < 0 || cellX >= s.waterColumns || cellY >= s.waterRows) {
+			return;
+		}
+		for (int index : s.waterCells[size_t(cellY) * size_t(s.waterColumns) + size_t(cellX)]) {
+			if (tested[size_t(index)] != 0) {
+				continue;
+			}
+			tested[size_t(index)] = 1;
+			const Water& water = s.waters[size_t(index)];
+			for (int side = 0; side != count; ++side) {
+				Vector3 start = from + Vector3(0.0f, 0.0f, sides[side]);
+				float t;
+				if (crossTriangle(water, 0, 1, 2, start, delta, t) && t < fraction) {
+					fraction = t;
+					found = true;
 				}
-				tested[size_t(index)] = 1;
-				const Water& water = s.waters[size_t(index)];
-				for (int side = 0; side != count; ++side) {
-					Vector3 start = from + Vector3(0.0f, 0.0f, sides[side]);
-					float t;
-					if (crossTriangle(water, 0, 1, 2, start, delta, t) && t < fraction) {
-						fraction = t;
-						found = true;
-					}
-					if (water.corners == 4 && crossTriangle(water, 1, 3, 2, start, delta, t) && t < fraction) {
-						fraction = t;
-						found = true;
-					}
+				if (water.corners == 4 && crossTriangle(water, 1, 3, 2, start, delta, t) && t < fraction) {
+					fraction = t;
+					found = true;
 				}
 			}
+		}
+	};
+	while (column >= 0 && row >= 0 && column < s.waterColumns && row < s.waterRows) {
+		visit(column, row);
+		float next = std::min(nextX, nextY);
+		if (next > leave) {
+			break;
+		}
+		if (nextX < nextY - CornerTime) {
+			column += stepX;
+			nextX += strideX;
+		} else if (nextY < nextX - CornerTime) {
+			row += stepY;
+			nextY += strideY;
+		} else {
+			visit(column + stepX, row);
+			visit(column, row + stepY);
+			column += stepX;
+			row += stepY;
+			nextX += strideX;
+			nextY += strideY;
 		}
 	}
 	return found;
