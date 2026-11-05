@@ -348,6 +348,7 @@ struct State {
 	std::vector<Body> bodies;
 	std::vector<int> freeBodies;
 	std::vector<int> accelerated;
+	std::vector<int> rolling;
 	std::vector<int> floating;
 	std::vector<JPH::BodyID> playerBodies;
 	std::vector<int> playerWorlds;

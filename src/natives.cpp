@@ -239,6 +239,11 @@ cell AMX_NATIVE_CALL A3D_SetRollingFriction(AMX* amx, const cell* params) {
 		return false;
 	}
 	body->rollingFriction = deceleration;
+	State& s = state();
+	s.rolling.erase(std::remove(s.rolling.begin(), s.rolling.end(), params[1]), s.rolling.end());
+	if (deceleration > 0.0f) {
+		s.rolling.push_back(params[1]);
+	}
 	return true;
 }
 

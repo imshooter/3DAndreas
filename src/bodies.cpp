@@ -206,18 +206,16 @@ void applyAccelerations() {
 
 void applyRollingFriction(float elapsed) {
 	State& s = state();
-	JPH::BodyIDVector active;
-	s.system->GetActiveBodies(JPH::EBodyType::RigidBody, active);
+	if (s.rolling.empty()) {
+		return;
+	}
 	JPH::BodyInterface& bodies = s.system->GetBodyInterface();
-	for (const JPH::BodyID& id : active) {
-		uint64_t data = bodies.GetUserData(id);
-		if (kindOf(data) != Kind::Object) {
+	for (int index : s.rolling) {
+		const Body* body = findBody(index);
+		if (body == nullptr || !bodies.IsActive(body->id)) {
 			continue;
 		}
-		const Body* body = findBody(indexOf(data));
-		if (body == nullptr || body->rollingFriction <= 0.0f) {
-			continue;
-		}
+		const JPH::BodyID& id = body->id;
 		JPH::Vec3 linear;
 		JPH::Vec3 angular;
 		bodies.GetLinearAndAngularVelocity(id, linear, angular);
@@ -394,6 +392,9 @@ int createBody(AMX* owner, const JPH::Shape* shape, int modelid, Vector3 positio
 		body.rollingFriction = model->rollingFriction.value_or(0.0f);
 		body.syncError = model->syncError.value_or(body.syncError);
 	}
+	if (body.rollingFriction > 0.0f) {
+		s.rolling.push_back(index);
+	}
 	if (dynamic && modelid >= 0 && s.objects != nullptr) {
 		IObject* object = s.objects->create(modelid, position, body.rotation, s.settings.drawDistance);
 		if (object != nullptr) {
@@ -422,6 +423,7 @@ bool destroyBody(int index) {
 	}
 	*body = Body();
 	s.accelerated.erase(std::remove(s.accelerated.begin(), s.accelerated.end(), index), s.accelerated.end());
+	s.rolling.erase(std::remove(s.rolling.begin(), s.rolling.end(), index), s.rolling.end());
 	s.floating.erase(std::remove(s.floating.begin(), s.floating.end(), index), s.floating.end());
 	s.freeBodies.push_back(index);
 	return true;
