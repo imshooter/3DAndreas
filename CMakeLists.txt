@@ -1,6 +1,6 @@
 
 cmake_minimum_required(VERSION 3.19)
-project(3DAndreas VERSION 0.7.3 LANGUAGES C CXX)
+project(3DAndreas VERSION 0.7.4 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
