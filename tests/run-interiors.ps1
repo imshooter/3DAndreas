@@ -64,8 +64,10 @@ if (!$process.WaitForExit(45000)) {
     throw "Test server timed out: $testRoot"
 }
 $output = Get-Content -LiteralPath (Join-Path $testRoot 'stdout.log') -Raw
-$output -split '\r?\n' | Where-Object { $_ -match '\[interiors\]|\[queries\]|\[groups\]|\[vehicles\]|\[smoke\]|3DAndreas|error|warning' } | Write-Output
-$result = [regex]::Match($output, '\[interiors\] DONE checks (\d+) failures (\d+)')
-if ($output -match '(?i)Run time error|\[Error\]|Unknown native|not found in script|\bFAIL\b' -or ($Test -like 'interiors*' -and (!$result.Success -or [int]$result.Groups[2].Value -ne 0))) {
+$output -split '\r?\n' | Where-Object { $_ -match '\[interiors\]|\[water\]|\[queries\]|\[groups\]|\[vehicles\]|\[smoke\]|3DAndreas|error|warning' } | Write-Output
+$tag = ($Test -split '-')[0]
+$result = [regex]::Match($output, "\[$tag\] DONE checks (\d+) failures (\d+)")
+$counted = (Get-Content -LiteralPath (Join-Path $PSScriptRoot "$Test.pwn") -Raw) -match 'DONE checks'
+if ($output -match '(?i)Run time error|\[Error\]|Unknown native|not found in script|\bFAIL\b' -or ($counted -and (!$result.Success -or [int]$result.Groups[2].Value -ne 0))) {
     throw "Regression failed: $testRoot"
 }

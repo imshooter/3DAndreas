@@ -484,11 +484,13 @@ bool mapBetween(Vector3 from, Vector3 to, int world = -1);
 
 /**
  * @brief      Where a segment first crosses the surface of the water, as a fraction of its length.
+ *             With a `radius`, where a sphere moved along it first touches the surface, or `0.0`
+ *             when it already does at the start.
  *
  * @return     - `true` the segment crosses the water
  *             - `false` it does not, or the database has no water
  */
-bool waterAlong(Vector3 from, Vector3 to, float& fraction);
+bool waterAlong(Vector3 from, Vector3 to, float& fraction, float radius = 0.0f);
 
 /**
  * @brief      Push the floating bodies that are in water up by their buoyancy.

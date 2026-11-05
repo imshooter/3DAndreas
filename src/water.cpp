@@ -127,7 +127,7 @@ bool waterLevel(float x, float y, float& level) {
 	return found;
 }
 
-bool waterAlong(Vector3 from, Vector3 to, float& fraction) {
+bool waterAlong(Vector3 from, Vector3 to, float& fraction, float radius) {
 	State& s = state();
 	if (s.waterCells.empty()) {
 		return false;
@@ -137,10 +137,22 @@ bool waterAlong(Vector3 from, Vector3 to, float& fraction) {
 	fraction = 1.0f;
 	float maxX = s.waterMinX + float(s.waterColumns) * WaterCell;
 	float maxY = s.waterMinY + float(s.waterRows) * WaterCell;
-	if ((from.z >= 0.0f) != (to.z >= 0.0f)) {
-		float t = from.z / (from.z - to.z);
+	float level;
+	if (radius > 0.0f && waterLevel(from.x, from.y, level) && std::abs(from.z - level) < radius) {
+		fraction = 0.0f;
+		return true;
+	}
+	const float sides[2] = { -radius, radius };
+	int count = radius > 0.0f ? 2 : 1;
+	for (int side = 0; side != count; ++side) {
+		float start = from.z + sides[side];
+		float end = to.z + sides[side];
+		if ((start >= 0.0f) == (end >= 0.0f)) {
+			continue;
+		}
+		float t = start / (start - end);
 		Vector3 point = from + delta * t;
-		if (point.x < s.waterMinX || point.x >= maxX || point.y < s.waterMinY || point.y >= maxY) {
+		if (t < fraction && (point.x < s.waterMinX || point.x >= maxX || point.y < s.waterMinY || point.y >= maxY)) {
 			fraction = t;
 			found = true;
 		}
@@ -165,14 +177,17 @@ bool waterAlong(Vector3 from, Vector3 to, float& fraction) {
 				}
 				tested[size_t(index)] = 1;
 				const Water& water = s.waters[size_t(index)];
-				float t;
-				if (crossTriangle(water, 0, 1, 2, from, delta, t) && t < fraction) {
-					fraction = t;
-					found = true;
-				}
-				if (water.corners == 4 && crossTriangle(water, 1, 3, 2, from, delta, t) && t < fraction) {
-					fraction = t;
-					found = true;
+				for (int side = 0; side != count; ++side) {
+					Vector3 start = from + Vector3(0.0f, 0.0f, sides[side]);
+					float t;
+					if (crossTriangle(water, 0, 1, 2, start, delta, t) && t < fraction) {
+						fraction = t;
+						found = true;
+					}
+					if (water.corners == 4 && crossTriangle(water, 1, 3, 2, start, delta, t) && t < fraction) {
+						fraction = t;
+						found = true;
+					}
 				}
 			}
 		}

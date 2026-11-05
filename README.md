@@ -271,6 +271,7 @@ The scripts in [`tests`](tests) run as the main script, print what they check an
 | [`smoke.pwn`](tests/smoke.pwn) | A sphere, a box and a model shaped object dropped on the ground. |
 | [`interiors.pwn`](tests/interiors.pwn) | Worlds and interiors: bodies, the map, queries, zones, resting bodies, and players and vehicles changing interior. |
 | [`interiors-legacy.pwn`](tests/interiors-legacy.pwn) | The natives as 0.7.2 declared them, compiled with its include and run on the new component. |
+| [`water.pwn`](tests/water.pwn) | A sphere touching the sea and an indoor pool with its surface, falling, rising, thrown or starting across it. |
 | [`features.pwn`](tests/features.pwn) | Zones, rolling friction, planar motion, gravity, acceleration, collision flags, cylinders and areas. |
 | [`streamer.pwn`](tests/streamer.pwn) | A box shown by a streamer object. Needs the streamer plugin. |
 | [`queries.pwn`](tests/queries.pwn) | Rays, ground, sight, sweeps, overlaps, worlds, bots and vehicles in shapes, and the cost of each native. |
@@ -291,7 +292,7 @@ On Windows, `run-interiors.ps1` runs the interior tests in a new server in a tem
 ./tests/run-interiors.ps1 -ServerRoot C:/path/to/server -Library C:/path/to/build/Release/3DAndreas.dll
 ```
 
-`-ContactCache` runs them with the contact cache on, and `-Test interiors-legacy -LegacyInclude` runs the old natives against a server that still holds the include of 0.7.2. Water decides what is under it in the world of the query and every interior, so a pool high in a building does not flood the street under its floor. The C++ interface checks every interior.
+`-ContactCache` runs them with the contact cache on, `-Test water` runs the water test, and `-Test interiors-legacy -LegacyInclude` runs the old natives against a server that still holds the include of 0.7.2. Water decides what is under it in the world of the query and every interior, so a pool high in a building does not flood the street under its floor. The C++ interface checks every interior.
 
 ## Thanks to
 

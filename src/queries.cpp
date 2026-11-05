@@ -263,7 +263,7 @@ bool sweepSphere(float radius, Vector3 from, Vector3 to, int world, uint32_t fla
 	QueryFilter filter(world, flags, interior);
 	s.system->GetNarrowPhaseQuery().CastShape(cast, settings, toJoltPoint(from), collector, {}, {}, filter);
 	float water;
-	if ((flags & CollideWater) != 0 && waterAlong(from, to, water) && (!collector.HadHit() || water < collector.mHit.mFraction)) {
+	if ((flags & CollideWater) != 0 && waterAlong(from, to, water, radius) && (!collector.HadHit() || water < collector.mHit.mFraction)) {
 		hit.point = cast.GetPointOnRay(water);
 		hit.normal = direction.GetZ() > 0.0f ? -JPH::Vec3::sAxisZ() : JPH::Vec3::sAxisZ();
 		hit.type = Hit::Water;
