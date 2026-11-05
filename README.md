@@ -198,7 +198,7 @@ Every setting is optional. These are the defaults:
 | `database` | Map database, relative to the server. When the default file is missing, `scriptfiles/colandreas/ColAndreas.cadb` is read instead. |
 | `models` | Model settings, relative to the server. A missing file leaves every model with the collision of the game. |
 | `navmesh` | Navigation mesh, relative to the server. A missing file leaves walks on the paths of the game. |
-| `threads` | Worker threads of the simulation. `0` runs it on the thread of the server. |
+| `threads` | Worker threads of the simulation, and threads that build the map when the server starts. `0` runs the simulation on the thread of the server and builds the map on it too. |
 | `rate` | Simulation steps per second, at least `10`. |
 | `sync_error` | Distance in metres the object players see may stray from its body, or its far end may turn away, before a new move is sent. |
 | `sync_horizon` | Seconds ahead each move sent to the players aims. |

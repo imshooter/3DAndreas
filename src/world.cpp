@@ -335,7 +335,7 @@ void buildPlacedShapes() {
 			shapes[index] = buildStatic(s.models.at(ids[index]));
 		}
 	};
-	unsigned count = std::min(std::max(std::thread::hardware_concurrency(), 1u), MaxBuildThreads);
+	unsigned count = std::clamp(unsigned(std::max(s.settings.threads, 1)), 1u, MaxBuildThreads);
 	std::vector<std::thread> threads;
 	for (unsigned index = 1; index < count; ++index) {
 		threads.emplace_back(work);
