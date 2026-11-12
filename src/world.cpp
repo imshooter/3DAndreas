@@ -510,7 +510,7 @@ int buildMap() {
 	s.placementBodies.assign(s.placements.size(), JPH::BodyID());
 	s.placementRemoved.assign(s.placements.size(), 0);
 	s.placementHidden.assign(s.placements.size(), 0);
-	s.hiddenWorlds.clear();
+	s.removals.clear();
 	for (uint32_t index = 0; index != uint32_t(s.placements.size()); ++index) {
 		const Placement& placement = s.placements[index];
 		JPH::ShapeRefC shape = staticShape(placement.modelid);

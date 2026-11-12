@@ -15,6 +15,14 @@ float readFloat(const cell* params, int index) {
 	return amx_ctof(params[index]);
 }
 
+bool finite(float value) {
+	return std::isfinite(value);
+}
+
+bool finite(Vector3 value) {
+	return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+}
+
 cell optional(const cell* params, int index, cell fallback) {
 	return params[0] >= cell(index * sizeof(cell)) ? params[index] : fallback;
 }
@@ -70,8 +78,12 @@ JPH::Ref<JPH::Shape> boxOf(Vector3 size) {
 	return new JPH::BoxShape(half, std::min(JPH::cDefaultConvexRadius, half.ReduceMin()));
 }
 
+bool positive(float value) {
+	return value > 0.0f && finite(value);
+}
+
 bool positive(Vector3 size) {
-	return size.x > 0.0f && size.y > 0.0f && size.z > 0.0f;
+	return size.x > 0.0f && size.y > 0.0f && size.z > 0.0f && finite(size);
 }
 
 cell AMX_NATIVE_CALL A3D_CreateObject(AMX* amx, const cell* params) {
@@ -89,7 +101,7 @@ cell AMX_NATIVE_CALL A3D_CreateObject(AMX* amx, const cell* params) {
 
 cell AMX_NATIVE_CALL A3D_CreateSphere(AMX* amx, const cell* params) {
 	float radius = readFloat(params, 2);
-	if (radius <= 0.0f) {
+	if (!positive(radius)) {
 		return InvalidPhys;
 	}
 	return createBody(amx, new JPH::SphereShape(radius), params[1], readVector(params, 3), JPH::Quat::sIdentity(), readFloat(params, 6), params[7], optional(params, 8, -1), Kind::Object);
@@ -122,7 +134,7 @@ cell AMX_NATIVE_CALL A3D_CreateStaticBox(AMX* amx, const cell* params) {
 cell AMX_NATIVE_CALL A3D_CreateStaticCylinder(AMX* amx, const cell* params) {
 	float radius = readFloat(params, 1);
 	float height = readFloat(params, 2);
-	if (radius <= 0.0f || height <= 0.0f) {
+	if (!positive(radius) || !positive(height)) {
 		return InvalidPhys;
 	}
 	JPH::Ref<JPH::Shape> cylinder = new JPH::CylinderShape(height * 0.5f, radius, std::min(JPH::cDefaultConvexRadius, std::min(radius, height * 0.5f)));
@@ -144,7 +156,7 @@ cell AMX_NATIVE_CALL A3D_CreateZone(AMX* amx, const cell* params) {
 
 cell AMX_NATIVE_CALL A3D_CreateZoneSphere(AMX* amx, const cell* params) {
 	float radius = readFloat(params, 1);
-	if (radius <= 0.0f) {
+	if (!positive(radius)) {
 		return InvalidPhys;
 	}
 	return createBody(amx, new JPH::SphereShape(radius), -1, readVector(params, 2), JPH::Quat::sIdentity(), 0.0f, params[5], optional(params, 6, -1), Kind::Zone);
@@ -160,10 +172,10 @@ cell AMX_NATIVE_CALL A3D_IsValidObject(AMX* amx, const cell* params) {
 
 cell AMX_NATIVE_CALL A3D_SetVelocity(AMX* amx, const cell* params) {
 	Body* body = movingBody(params);
-	if (body == nullptr) {
+	Vector3 velocity = readVector(params, 2);
+	if (body == nullptr || !finite(velocity)) {
 		return false;
 	}
-	Vector3 velocity = readVector(params, 2);
 	bodies().SetLinearVelocity(body->id, JPH::Vec3(velocity.x, velocity.y, velocity.z));
 	bodies().ActivateBody(body->id);
 	return true;
@@ -200,20 +212,20 @@ cell AMX_NATIVE_CALL A3D_GetMoveAngle(AMX* amx, const cell* params) {
 
 cell AMX_NATIVE_CALL A3D_ApplyImpulse(AMX* amx, const cell* params) {
 	Body* body = movingBody(params);
-	if (body == nullptr) {
+	Vector3 impulse = readVector(params, 2);
+	if (body == nullptr || !finite(impulse)) {
 		return false;
 	}
-	Vector3 impulse = readVector(params, 2);
 	bodies().AddImpulse(body->id, JPH::Vec3(impulse.x, impulse.y, impulse.z));
 	return true;
 }
 
 cell AMX_NATIVE_CALL A3D_SetAcceleration(AMX* amx, const cell* params) {
 	Body* body = movingBody(params);
-	if (body == nullptr) {
+	Vector3 acceleration = readVector(params, 2);
+	if (body == nullptr || !finite(acceleration)) {
 		return false;
 	}
-	Vector3 acceleration = readVector(params, 2);
 	setAcceleration(params[1], JPH::Vec3(acceleration.x, acceleration.y, acceleration.z));
 	bodies().ActivateBody(body->id);
 	return true;
@@ -221,21 +233,22 @@ cell AMX_NATIVE_CALL A3D_SetAcceleration(AMX* amx, const cell* params) {
 
 cell AMX_NATIVE_CALL A3D_SetGravity(AMX* amx, const cell* params) {
 	Body* body = movingBody(params);
-	if (body == nullptr) {
+	float gravity = readFloat(params, 2);
+	if (body == nullptr || !finite(gravity)) {
 		return false;
 	}
 	JPH::BodyLockWrite lock(state().system->GetBodyLockInterface(), body->id);
 	if (!lock.Succeeded()) {
 		return false;
 	}
-	lock.GetBody().GetMotionProperties()->SetGravityFactor(readFloat(params, 2) / StandardGravity);
+	lock.GetBody().GetMotionProperties()->SetGravityFactor(gravity / StandardGravity);
 	return true;
 }
 
 cell AMX_NATIVE_CALL A3D_SetRollingFriction(AMX* amx, const cell* params) {
 	Body* body = movingBody(params);
 	float deceleration = readFloat(params, 2);
-	if (body == nullptr || deceleration < 0.0f) {
+	if (body == nullptr || deceleration < 0.0f || !finite(deceleration)) {
 		return false;
 	}
 	body->rollingFriction = deceleration;
@@ -283,7 +296,7 @@ cell AMX_NATIVE_CALL A3D_GetCollisions(AMX* amx, const cell* params) {
 cell AMX_NATIVE_CALL A3D_SetCollisionSpeed(AMX* amx, const cell* params) {
 	Body* body = movingBody(params);
 	float speed = readFloat(params, 2);
-	if (body == nullptr || speed < 0.0f) {
+	if (body == nullptr || speed < 0.0f || !finite(speed)) {
 		return false;
 	}
 	body->collisionSpeed = speed;
@@ -337,11 +350,17 @@ cell AMX_NATIVE_CALL A3D_GetPosition(AMX* amx, const cell* params) {
 
 cell AMX_NATIVE_CALL A3D_SetPosition(AMX* amx, const cell* params) {
 	Body* body = findBody(params[1]);
-	if (body == nullptr) {
+	Vector3 position = readVector(params, 2);
+	if (body == nullptr || !finite(position)) {
 		return false;
 	}
-	Vector3 position = readVector(params, 2);
+	if (body->kind != Kind::Zone) {
+		wakeAround(body->id);
+	}
 	bodies().SetPosition(body->id, JPH::RVec3(position.x, position.y, position.z), body->kind == Kind::Object ? JPH::EActivation::Activate : JPH::EActivation::DontActivate);
+	if (body->kind == Kind::Static) {
+		wakeAround(body->id);
+	}
 	syncTeleport(*body);
 	return true;
 }
@@ -356,35 +375,46 @@ cell AMX_NATIVE_CALL A3D_GetRotation(AMX* amx, const cell* params) {
 
 cell AMX_NATIVE_CALL A3D_SetRotation(AMX* amx, const cell* params) {
 	Body* body = findBody(params[1]);
-	if (body == nullptr) {
+	Vector3 rotation = readVector(params, 2);
+	if (body == nullptr || !finite(rotation)) {
 		return false;
 	}
-	bodies().SetRotation(body->id, toJolt(readVector(params, 2)), body->kind == Kind::Object ? JPH::EActivation::Activate : JPH::EActivation::DontActivate);
+	if (body->kind != Kind::Zone) {
+		wakeAround(body->id);
+	}
+	bodies().SetRotation(body->id, toJolt(rotation), body->kind == Kind::Object ? JPH::EActivation::Activate : JPH::EActivation::DontActivate);
+	if (body->kind == Kind::Static) {
+		wakeAround(body->id);
+	}
 	syncTeleport(*body);
 	return true;
 }
 
 cell AMX_NATIVE_CALL A3D_SetFriction(AMX* amx, const cell* params) {
 	Body* body = findBody(params[1]);
-	if (body == nullptr) {
+	float friction = readFloat(params, 2);
+	if (body == nullptr || !finite(friction)) {
 		return false;
 	}
-	bodies().SetFriction(body->id, readFloat(params, 2));
+	bodies().SetFriction(body->id, friction);
 	return true;
 }
 
 cell AMX_NATIVE_CALL A3D_SetBounce(AMX* amx, const cell* params) {
 	Body* body = findBody(params[1]);
-	if (body == nullptr) {
+	float bounce = readFloat(params, 2);
+	if (body == nullptr || !finite(bounce)) {
 		return false;
 	}
-	bodies().SetRestitution(body->id, readFloat(params, 2));
+	bodies().SetRestitution(body->id, bounce);
 	return true;
 }
 
 cell AMX_NATIVE_CALL A3D_SetDamping(AMX* amx, const cell* params) {
 	Body* body = movingBody(params);
-	if (body == nullptr) {
+	float linear = readFloat(params, 2);
+	float angular = readFloat(params, 3);
+	if (body == nullptr || !finite(linear) || !finite(angular)) {
 		return false;
 	}
 	JPH::BodyLockWrite lock(state().system->GetBodyLockInterface(), body->id);
@@ -392,8 +422,8 @@ cell AMX_NATIVE_CALL A3D_SetDamping(AMX* amx, const cell* params) {
 		return false;
 	}
 	JPH::MotionProperties* motion = lock.GetBody().GetMotionProperties();
-	motion->SetLinearDamping(readFloat(params, 2));
-	motion->SetAngularDamping(readFloat(params, 3));
+	motion->SetLinearDamping(linear);
+	motion->SetAngularDamping(angular);
 	return true;
 }
 
@@ -401,7 +431,7 @@ cell AMX_NATIVE_CALL A3D_SetBuoyancy(AMX* amx, const cell* params) {
 	Body* body = movingBody(params);
 	float buoyancy = readFloat(params, 2);
 	float drag = readFloat(params, 3);
-	if (body == nullptr || buoyancy < 0.0f || drag < 0.0f) {
+	if (body == nullptr || buoyancy < 0.0f || drag < 0.0f || !finite(buoyancy) || !finite(drag)) {
 		return false;
 	}
 	setBuoyancy(params[1], buoyancy, drag);
@@ -412,7 +442,7 @@ cell AMX_NATIVE_CALL A3D_SetBuoyancy(AMX* amx, const cell* params) {
 cell AMX_NATIVE_CALL A3D_SetSyncError(AMX* amx, const cell* params) {
 	Body* body = movingBody(params);
 	float error = readFloat(params, 2);
-	if (body == nullptr || error <= 0.0f) {
+	if (body == nullptr || !positive(error)) {
 		return false;
 	}
 	body->syncError = error;
@@ -433,14 +463,11 @@ cell AMX_NATIVE_CALL A3D_GetObjectID(AMX* amx, const cell* params) {
 }
 
 cell AMX_NATIVE_CALL A3D_AttachDynamicObject(AMX* amx, const cell* params) {
-	State& s = state();
 	Body* body = movingBody(params);
 	if (body == nullptr) {
 		return false;
 	}
-	if (body->sync == Sync::Object && s.objects != nullptr) {
-		s.objects->release(body->objectid);
-	}
+	hideBody(*body);
 	body->sync = Sync::Script;
 	body->objectid = params[2];
 	syncTeleport(*body);

@@ -610,7 +610,7 @@ cell AMX_NATIVE_CALL A3D_CreateExplosion(AMX* amx, const cell* params) {
 	Vector3 centre = readVector(params, 1);
 	float radius = readFloat(params, 4);
 	float force = readFloat(params, 5);
-	if (radius <= 0.0f) {
+	if (!(radius > 0.0f) || !finite(radius) || !finite(centre) || !finite(force)) {
 		return 0;
 	}
 	JPH::SphereShape sphere(radius);

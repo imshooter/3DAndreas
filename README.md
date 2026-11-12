@@ -272,6 +272,9 @@ The scripts in [`tests`](tests) run as the main script, print what they check an
 | [`interiors.pwn`](tests/interiors.pwn) | Worlds and interiors: bodies, the map, queries, zones, resting bodies, and players and vehicles changing interior. |
 | [`interiors-legacy.pwn`](tests/interiors-legacy.pwn) | The natives as 0.7.2 declared them, compiled with its include and run on the new component. |
 | [`water.pwn`](tests/water.pwn) | A sphere touching the sea and an indoor pool with its surface, falling, rising, thrown or starting across it. |
+| [`wake.pwn`](tests/wake.pwn) | A body asleep on a static or a moving box that is moved, turned, destroyed or sent to another world, which must fall. |
+| [`finite.pwn`](tests/finite.pwn) | Values that are infinite or not a number, which every native that creates or sets must refuse. |
+| [`restart.pwn`](tests/restart.pwn) | A gamemode restart with [`restart-side.pwn`](tests/restart-side.pwn) as a side script: map objects come back with the script that removed them, and a moving object of the side script gets a new global object. |
 | [`optimization.pwn`](tests/optimization.pwn) | The time of long and random water rays, sphere sweeps and dense overlaps, with checksums to compare two builds. |
 | [`rolling-optimization.pwn`](tests/rolling-optimization.pwn) | The time of a thousand active bodies, and rolling friction turned on, off and on a reused body. |
 | [`features.pwn`](tests/features.pwn) | Zones, rolling friction, planar motion, gravity, acceleration, collision flags, cylinders and areas. |
@@ -294,7 +297,7 @@ On Windows, `run-interiors.ps1` runs the interior tests in a new server in a tem
 ./tests/run-interiors.ps1 -ServerRoot C:/path/to/server -Library C:/path/to/build/Release/3DAndreas.dll
 ```
 
-`-ContactCache` runs them with the contact cache on, `-Test water` runs the water test, and `-Test interiors-legacy -LegacyInclude` runs the old natives against a server that still holds the include of 0.7.2. Water decides what is under it in the world of the query and every interior, so a pool high in a building does not flood the street under its floor. The C++ interface checks every interior.
+`-ContactCache` runs them with the contact cache on, `-Test water`, `-Test wake` and `-Test finite` run those tests, `-Test restart -Side restart-side` runs the restart test with its side script, and `-Test interiors-legacy -LegacyInclude` runs the old natives against a server that still holds the include of 0.7.2. Water decides what is under it in the world of the query and every interior, so a pool high in a building does not flood the street under its floor. The C++ interface checks every interior.
 
 ## Thanks to
 

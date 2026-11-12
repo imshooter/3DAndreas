@@ -329,4 +329,73 @@ void syncTeleport(Body& body) {
 	place(body, Vector3(float(position.GetX()), float(position.GetY()), float(position.GetZ())), euler);
 }
 
+void showBody(int index) {
+	State& s = state();
+	Body* body = findBody(index);
+	if (body == nullptr || body->kind != Kind::Object || body->modelid < 0 || body->sync != Sync::None || s.objects == nullptr) {
+		return;
+	}
+	const JPH::BodyInterface& bodies = s.system->GetBodyInterfaceNoLock();
+	JPH::RVec3 position = bodies.GetPosition(body->id);
+	IObject* object = s.objects->create(body->modelid, Vector3(float(position.GetX()), float(position.GetY()), float(position.GetZ())), toEuler(bodies.GetRotation(body->id)), s.settings.drawDistance);
+	if (object == nullptr) {
+		return;
+	}
+	int objectid = object->getID();
+	if (objectid >= int(s.objectBodies.size())) {
+		s.objectBodies.resize(size_t(objectid) + 1, -1);
+	}
+	s.objectBodies[size_t(objectid)] = index;
+	body->objectid = objectid;
+	body->sync = Sync::Object;
+}
+
+void hideBody(Body& body) {
+	State& s = state();
+	if (body.sync != Sync::Object || s.objects == nullptr) {
+		return;
+	}
+	int objectid = body.objectid;
+	body.sync = Sync::None;
+	body.objectid = -1;
+	if (objectid >= 0 && objectid < int(s.objectBodies.size())) {
+		s.objectBodies[size_t(objectid)] = -1;
+	}
+	s.objects->release(objectid);
+}
+
+void loseObject(int objectid) {
+	State& s = state();
+	if (objectid < 0 || objectid >= int(s.objectBodies.size()) || s.objectBodies[size_t(objectid)] < 0) {
+		return;
+	}
+	int index = s.objectBodies[size_t(objectid)];
+	s.objectBodies[size_t(objectid)] = -1;
+	Body* body = findBody(index);
+	if (body == nullptr || body->sync != Sync::Object || body->objectid != objectid) {
+		return;
+	}
+	body->sync = Sync::None;
+	body->objectid = -1;
+	s.orphans.push_back(index);
+}
+
+void reshowBodies() {
+	State& s = state();
+	if (s.restarted) {
+		for (int index : s.orphans) {
+			Body* body = findBody(index);
+			if (body == nullptr || body->sync != Sync::None) {
+				continue;
+			}
+			showBody(index);
+			if (body->sync == Sync::Object) {
+				syncTeleport(*body);
+			}
+		}
+	}
+	s.orphans.clear();
+	s.restarted = false;
+}
+
 }

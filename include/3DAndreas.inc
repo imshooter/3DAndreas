@@ -11,6 +11,11 @@
  * `A3D_AttachDynamicObject`. Static objects and zones never move and show nothing. Include this
  * file after streamer.inc for streamer objects.
  *
+ * A gamemode restart destroys every global object, so the moving objects of the scripts that stay
+ * loaded get new ones, and `A3D_GetObjectID` may give another id after it. Every number given to
+ * the simulation must be finite: a native given an infinite value, or one that is not a number,
+ * changes nothing and returns `false`, or `INVALID_PHYSIC_ID` when it creates.
+ *
  * The same world answers questions about the map: what a segment hits, where the ground is, whether
  * two points see each other, what a sphere or a box overlaps, and which players and vehicles stand
  * inside a sphere or a cone.
@@ -335,6 +340,8 @@ native Physic:A3D_CreateZoneSphere(Float:radius, Float:x, Float:y, Float:z, worl
 /**
  * @brief      Destroy a physics object, a static object or a zone, and the global object that shows it.
  *
+ * Physics objects resting on it wake up and fall.
+ *
  * @param      physicid  Physics object to destroy.
  *
  * @return     - `true` it was destroyed
@@ -552,6 +559,8 @@ native bool:A3D_GetPosition(Physic:physicid, &Float:x, &Float:y, &Float:z);
 /**
  * @brief      Move a physics object to a new place at once.
  *
+ * Physics objects resting on it wake up and fall.
+ *
  * @param      physicid  Physics object to move.
  * @param      x         Position on the X axis.
  * @param      y         Position on the Y axis.
@@ -577,6 +586,8 @@ native bool:A3D_GetRotation(Physic:physicid, &Float:rx, &Float:ry, &Float:rz);
 
 /**
  * @brief      Turn a physics object to a new rotation at once.
+ *
+ * Physics objects resting on it wake up and fall.
  *
  * @param      physicid  Physics object to turn.
  * @param      rx        Rotation on the X axis.
@@ -1312,7 +1323,8 @@ native A3D_GetActorsOnScreen(playerid, actors[], size = sizeof (actors), bool:si
  *             for what players see.
  *
  * A removal may hold for one virtual world only. Physics objects resting on a removed map object
- * wake up and fall.
+ * wake up and fall. A removal lasts while the script that made it is loaded. When that script
+ * unloads, as a gamemode does on a restart, the map objects no other script removed come back.
  *
  * @param      modelid     Model to remove, or `-1` for every model.
  * @param      x           Centre on the X axis.
@@ -1329,8 +1341,9 @@ native A3D_RemoveBuilding(modelid, Float:x, Float:y, Float:z, Float:radius, worl
 /**
  * @brief      Bring back map objects removed by `A3D_RemoveBuilding`.
  *
- * Restoring for every world undoes every removal of a map object. A map object removed for every
- * world comes back only when it is restored for every world.
+ * Restoring undoes the removals of every script. Restoring for every world undoes every removal
+ * of a map object. A map object removed for every world comes back only when it is restored for
+ * every world.
  *
  * @param      modelid     Model to bring back, or `-1` for every model.
  * @param      x           Centre on the X axis.

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 
 namespace physics {
 
@@ -28,62 +29,75 @@ bool nearPlacement(uint32_t index, int modelid, Vector3 centre, float radius, in
 	return glm::dot(offset, offset) <= radius * radius;
 }
 
-bool removeBuilding(uint32_t index, int world) {
+bool removeBuilding(uint32_t index, int world, AMX* owner) {
 	State& s = state();
-	if (s.placementRemoved[index] != 0) {
+	if (world >= 0 && s.placementRemoved[index] != 0) {
+		return false;
+	}
+	std::vector<Removal>& held = s.removals[index];
+	bool known = false;
+	bool mine = false;
+	for (const Removal& removal : held) {
+		if (removal.world == world) {
+			known = true;
+			mine = mine || removal.owner == owner;
+		}
+	}
+	if (!mine) {
+		held.push_back({ owner, world });
+	}
+	if (known) {
 		return false;
 	}
 	JPH::BodyID id = s.placementBodies[index];
+	wakeAround(id);
 	if (world < 0) {
-		wakeAround(id);
 		s.system->GetBodyInterface().RemoveBody(id);
 		s.placementRemoved[index] = 1;
-		return true;
+	} else {
+		s.placementHidden[index] = 1;
 	}
-	std::vector<int>& worlds = s.hiddenWorlds[index];
-	if (std::find(worlds.begin(), worlds.end(), world) != worlds.end()) {
+	return true;
+}
+
+bool settleBuilding(uint32_t index, const std::vector<Removal>& held) {
+	State& s = state();
+	bool removed = false;
+	bool hidden = false;
+	for (const Removal& removal : held) {
+		removed = removed || removal.world < 0;
+		hidden = hidden || removal.world >= 0;
+	}
+	JPH::BodyID id = s.placementBodies[index];
+	if (s.placementRemoved[index] != 0 && !removed) {
+		s.system->GetBodyInterface().AddBody(id, JPH::EActivation::DontActivate);
+		s.placementRemoved[index] = 0;
+	}
+	s.placementHidden[index] = hidden ? 1 : 0;
+	if (s.placementRemoved[index] != 0) {
 		return false;
 	}
-	worlds.push_back(world);
-	s.placementHidden[index] = 1;
 	wakeAround(id);
 	return true;
 }
 
 bool restoreBuilding(uint32_t index, int world) {
 	State& s = state();
-	JPH::BodyID id = s.placementBodies[index];
-	bool restored = false;
-	if (world < 0) {
-		if (s.placementRemoved[index] != 0) {
-			s.system->GetBodyInterface().AddBody(id, JPH::EActivation::DontActivate);
-			s.placementRemoved[index] = 0;
-			restored = true;
-		}
-		if (s.placementHidden[index] != 0) {
-			s.hiddenWorlds.erase(index);
-			s.placementHidden[index] = 0;
-			restored = true;
-		}
-	} else {
-		auto found = s.hiddenWorlds.find(index);
-		if (found == s.hiddenWorlds.end()) {
-			return false;
-		}
-		std::vector<int>& worlds = found->second;
-		auto at = std::find(worlds.begin(), worlds.end(), world);
-		if (at == worlds.end()) {
-			return false;
-		}
-		worlds.erase(at);
-		if (worlds.empty()) {
-			s.hiddenWorlds.erase(found);
-			s.placementHidden[index] = 0;
-		}
-		restored = s.placementRemoved[index] == 0;
+	auto found = s.removals.find(index);
+	if (found == s.removals.end()) {
+		return false;
 	}
-	if (restored) {
-		wakeAround(id);
+	std::vector<Removal>& held = found->second;
+	size_t before = held.size();
+	held.erase(std::remove_if(held.begin(), held.end(), [world](const Removal& removal) {
+		return world < 0 || removal.world == world;
+	}), held.end());
+	if (held.size() == before) {
+		return false;
+	}
+	bool restored = settleBuilding(index, held);
+	if (held.empty()) {
+		s.removals.erase(found);
 	}
 	return restored;
 }
@@ -99,7 +113,7 @@ cell AMX_NATIVE_CALL A3D_RemoveBuilding(AMX* amx, const cell* params) {
 	float radius = readFloat(params, 5);
 	cell count = 0;
 	for (uint32_t index = 0; index != uint32_t(s.placementBodies.size()); ++index) {
-		if (nearPlacement(index, params[1], centre, radius, optional(params, 7, -1)) && removeBuilding(index, params[6])) {
+		if (nearPlacement(index, params[1], centre, radius, optional(params, 7, -1)) && removeBuilding(index, params[6], amx)) {
 			++count;
 		}
 	}
@@ -210,8 +224,25 @@ bool mapHidden(uint32_t placement, int world) {
 	if (world < 0 || placement >= s.placementHidden.size() || s.placementHidden[placement] == 0) {
 		return false;
 	}
-	auto found = s.hiddenWorlds.find(placement);
-	return found != s.hiddenWorlds.end() && std::find(found->second.begin(), found->second.end(), world) != found->second.end();
+	auto found = s.removals.find(placement);
+	return found != s.removals.end() && std::any_of(found->second.begin(), found->second.end(), [world](const Removal& removal) {
+		return removal.world == world;
+	});
+}
+
+void forgetRemovals(AMX* amx) {
+	State& s = state();
+	for (auto entry = s.removals.begin(); entry != s.removals.end();) {
+		std::vector<Removal>& held = entry->second;
+		size_t before = held.size();
+		held.erase(std::remove_if(held.begin(), held.end(), [amx](const Removal& removal) {
+			return removal.owner == amx;
+		}), held.end());
+		if (held.size() != before) {
+			settleBuilding(entry->first, held);
+		}
+		entry = held.empty() ? s.removals.erase(entry) : std::next(entry);
+	}
 }
 
 void registerMapNatives(IPawnScript& script) {

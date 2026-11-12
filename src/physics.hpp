@@ -207,6 +207,15 @@ struct Crossing {
 };
 
 /**
+ * @brief      A script that removed a map object with `A3D_RemoveBuilding`, in one virtual world or
+ *             in every world, `-1`. The map object comes back when no script that removed it is left.
+ */
+struct Removal {
+	AMX* owner = nullptr;
+	int world = -1;
+};
+
+/**
  * @brief      A loaded script.
  *
  * Publics are found by name at each call, because a library can rename and sort the table of
@@ -327,7 +336,7 @@ struct State {
 	std::vector<JPH::BodyID> placementBodies;
 	std::vector<uint8_t> placementRemoved;
 	std::vector<uint8_t> placementHidden;
-	std::unordered_map<uint32_t, std::vector<int>> hiddenWorlds;
+	std::unordered_map<uint32_t, std::vector<Removal>> removals;
 	std::vector<Water> waters;
 	std::vector<Surface> surfaces;
 	bool colAndreas = false;
@@ -350,6 +359,9 @@ struct State {
 	std::vector<int> accelerated;
 	std::vector<int> rolling;
 	std::vector<int> floating;
+	std::vector<int> objectBodies;
+	std::vector<int> orphans;
+	bool restarted = false;
 	std::vector<JPH::BodyID> playerBodies;
 	std::vector<int> playerWorlds;
 	std::vector<int> playerInteriors;
@@ -518,6 +530,11 @@ int buildMap();
 bool mapHidden(uint32_t placement, int world);
 
 bool mapMatches(uint32_t placement, const Context& context);
+
+/**
+ * @brief      Bring back the map objects no other script removed, when a script unloads.
+ */
+void forgetRemovals(AMX* amx);
 
 /**
  * @brief      The shape a model collides with when it stands still.
@@ -692,6 +709,28 @@ void syncRest(Body& body);
 void syncTeleport(Body& body);
 
 /**
+ * @brief      Create the global object that shows a moving body with a model, where the body is.
+ */
+void showBody(int index);
+
+/**
+ * @brief      Destroy the global object that shows a body.
+ */
+void hideBody(Body& body);
+
+/**
+ * @brief      Forget a global object that something else destroyed, so its body stops moving an id
+ *             that now belongs to another object.
+ */
+void loseObject(int objectid);
+
+/**
+ * @brief      Give a new global object to the bodies that lost theirs to a gamemode restart, which
+ *             destroys every global object. One a script destroyed stays gone.
+ */
+void reshowBodies();
+
+/**
  * @brief      Call a public of a script, if the script has it.
  *
  * @param      script     Script to call.
@@ -858,6 +897,13 @@ void registerRouteNatives(IPawnScript& script);
 void registerWalkNatives(IPawnScript& script);
 
 float readFloat(const cell* params, int index);
+
+/**
+ * @brief      Whether a number a script passed can go into the simulation: it is neither infinite
+ *             nor not a number. One such value in a body hides the bodies around it from queries.
+ */
+bool finite(float value);
+bool finite(Vector3 value);
 
 /**
  * @brief      An argument a script may leave out because an older include did not have it, or

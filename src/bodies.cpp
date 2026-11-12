@@ -339,6 +339,9 @@ Body* findBody(int index) {
 
 int createBody(AMX* owner, const JPH::Shape* shape, int modelid, Vector3 position, JPH::QuatArg rotation, float mass, int world, int interior, Kind kind, const ModelSettings* model) {
 	State& s = state();
+	if (!finite(position) || rotation.IsNaN() || !finite(mass)) {
+		return InvalidPhys;
+	}
 	int index;
 	if (!s.freeBodies.empty()) {
 		index = s.freeBodies.back();
@@ -395,13 +398,7 @@ int createBody(AMX* owner, const JPH::Shape* shape, int modelid, Vector3 positio
 	if (body.rollingFriction > 0.0f) {
 		s.rolling.push_back(index);
 	}
-	if (dynamic && modelid >= 0 && s.objects != nullptr) {
-		IObject* object = s.objects->create(modelid, position, body.rotation, s.settings.drawDistance);
-		if (object != nullptr) {
-			body.objectid = object->getID();
-			body.sync = Sync::Object;
-		}
-	}
+	showBody(index);
 	if (model != nullptr && model->buoyancy.value_or(0.0f) > 0.0f) {
 		setBuoyancy(index, *model->buoyancy, model->drag);
 	}
@@ -415,12 +412,13 @@ bool destroyBody(int index) {
 		return false;
 	}
 	JPH::BodyInterface& bodies = s.system->GetBodyInterface();
+	if (body->kind != Kind::Zone) {
+		wakeAround(body->id);
+	}
 	bodies.RemoveBody(body->id);
 	bodies.DestroyBody(body->id);
 	rememberBody(body->id, 0);
-	if (body->sync == Sync::Object && s.objects != nullptr) {
-		s.objects->release(body->objectid);
-	}
+	hideBody(*body);
 	*body = Body();
 	s.accelerated.erase(std::remove(s.accelerated.begin(), s.accelerated.end(), index), s.accelerated.end());
 	s.rolling.erase(std::remove(s.rolling.begin(), s.rolling.end(), index), s.rolling.end());
@@ -439,9 +437,7 @@ void regroupBody(Body& body) {
 		}
 	}
 	s.system->GetBodyInterface().InvalidateContactCache(body.id);
-	if (body.kind != Kind::Object) {
-		wakeAround(body.id);
-	}
+	wakeAround(body.id);
 }
 
 void setAcceleration(int index, JPH::Vec3Arg acceleration) {
@@ -482,6 +478,9 @@ void removePlayer(int playerid) {
 
 void step(double elapsed) {
 	State& s = state();
+	if (s.restarted || !s.orphans.empty()) {
+		reshowBodies();
+	}
 	s.now += elapsed;
 	s.accumulator = std::min(s.accumulator + elapsed, 0.25);
 	double interval = 1.0 / double(s.settings.rate);

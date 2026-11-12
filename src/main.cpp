@@ -35,7 +35,7 @@ double since(std::chrono::steady_clock::time_point start) {
 
 }
 
-class PhysicsComponent final : public A3D::IComponent3DAndreas, public PawnEventHandler, public CoreEventHandler, public PlayerConnectEventHandler, public PoolEventHandler<IVehicle>, public PoolEventHandler<IActor> {
+class PhysicsComponent final : public A3D::IComponent3DAndreas, public PawnEventHandler, public CoreEventHandler, public PlayerConnectEventHandler, public PoolEventHandler<IVehicle>, public PoolEventHandler<IActor>, public PoolEventHandler<IObject> {
 public:
 	PROVIDE_UID(0x7a3c91e45d2b8f16);
 
@@ -150,6 +150,9 @@ public:
 			s.pawn->getEventDispatcher().addEventHandler(this);
 		}
 		s.objects = components->queryComponent<IObjectsComponent>();
+		if (s.objects != nullptr) {
+			s.objects->getPoolEventDispatcher().addEventHandler(this);
+		}
 		s.vehicles = components->queryComponent<IVehiclesComponent>();
 		if (s.vehicles != nullptr) {
 			s.vehicles->getPoolEventDispatcher().addEventHandler(this);
@@ -170,6 +173,7 @@ public:
 		State& s = state();
 		forgetScript(script.GetAMX());
 		forgetRoutes(script.GetAMX());
+		forgetRemovals(script.GetAMX());
 		s.scripts.erase(script.GetAMX());
 	}
 
@@ -194,9 +198,14 @@ public:
 		removeActor(actor.getID());
 	}
 
+	void onPoolEntryDestroyed(IObject& object) override {
+		loseObject(object.getID());
+	}
+
 	void onFree(IComponent* component) override {
 		State& s = state();
 		if (component == s.objects) {
+			s.objects->getPoolEventDispatcher().removeEventHandler(this);
 			s.objects = nullptr;
 		}
 		if (component == s.vehicles) {
@@ -243,6 +252,7 @@ public:
 	}
 
 	void reset() override {
+		state().restarted = true;
 	}
 
 	void free() override {
@@ -251,7 +261,10 @@ public:
 			s.core->getEventDispatcher().removeEventHandler(this);
 			s.players->getPlayerConnectDispatcher().removeEventHandler(this);
 		}
-		s.objects = nullptr;
+		if (s.objects != nullptr) {
+			s.objects->getPoolEventDispatcher().removeEventHandler(this);
+			s.objects = nullptr;
+		}
 		if (s.vehicles != nullptr) {
 			s.vehicles->getPoolEventDispatcher().removeEventHandler(this);
 			s.vehicles = nullptr;

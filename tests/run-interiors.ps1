@@ -2,6 +2,7 @@ param(
     [Parameter(Mandatory = $true)][string]$ServerRoot,
     [Parameter(Mandatory = $true)][string]$Library,
     [ValidatePattern('^[a-zA-Z0-9-]+$')][string]$Test = 'interiors',
+    [ValidatePattern('^[a-zA-Z0-9-]*$')][string]$Side = '',
     [switch]$Baseline,
     [switch]$ContactCache,
     [switch]$LegacyInclude
@@ -11,7 +12,7 @@ $ErrorActionPreference = 'Stop'
 $repository = Split-Path $PSScriptRoot -Parent
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ('a3d-interiors-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $testRoot | Out-Null
-foreach ($folder in 'components', 'gamemodes', 'scriptfiles/3dandreas') {
+foreach ($folder in 'components', 'gamemodes', 'filterscripts', 'scriptfiles/3dandreas') {
     New-Item -ItemType Directory -Path (Join-Path $testRoot $folder) | Out-Null
 }
 Copy-Item -LiteralPath (Join-Path $ServerRoot 'omp-server.exe') -Destination $testRoot
@@ -21,6 +22,10 @@ foreach ($name in 'Actors', 'Classes', 'Console', 'CustomModels', 'Dialogs', 'Ga
 Copy-Item -LiteralPath $Library -Destination (Join-Path $testRoot 'components/3DAndreas.dll')
 Copy-Item -LiteralPath (Join-Path $ServerRoot 'scriptfiles/3dandreas/world.db') -Destination (Join-Path $testRoot 'scriptfiles/3dandreas')
 
+$sides = @()
+if ($Side) {
+    $sides = @('filterscripts/side')
+}
 $config = @{
     announce = $false
     enable_query = $false
@@ -28,7 +33,7 @@ $config = @{
     max_bots = 4
     name = '3DAndreas interior regression'
     network = @{ bind = '127.0.0.1'; port = 7819 }
-    pawn = @{ main_scripts = @('interiors'); side_scripts = @(); legacy_plugins = @() }
+    pawn = @{ main_scripts = @('interiors'); side_scripts = $sides; legacy_plugins = @() }
     rcon = @{ enable = $false; password = 'isolated-test-only' }
     '3dandreas' = @{ threads = 2; contact_cache = $ContactCache.IsPresent }
 }
@@ -52,6 +57,17 @@ $bytes = [IO.File]::ReadAllBytes($amx)
 if ([BitConverter]::ToUInt16($bytes, 4) -ne 0xF1E0 -or [BitConverter]::ToInt32($bytes, 0) -gt $bytes.Length) {
     throw "Invalid AMX: $amx"
 }
+if ($Side) {
+    $sideAmx = Join-Path $testRoot 'filterscripts/side.amx'
+    $sideArgs = @((Join-Path $PSScriptRoot "$Side.pwn")) + $includes + @('-;+', '-(+', '-d2', "-o$sideAmx")
+    $ErrorActionPreference = 'Continue'
+    $sideBuild = & (Join-Path $ServerRoot 'qawno/pawncc.exe') @sideArgs 2>&1 | ForEach-Object { "$_" }
+    $ErrorActionPreference = 'Stop'
+    $sideBuild | Write-Output
+    if ($sideBuild -match ' : (fatal error|error) [0-9]+:' -or !(Test-Path -LiteralPath $sideAmx)) {
+        throw "Pawn build failed: $testRoot"
+    }
+}
 $executable = Join-Path $testRoot 'omp-server.exe'
 $process = Start-Process -FilePath $executable -WorkingDirectory $testRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $testRoot 'stdout.log') -RedirectStandardError (Join-Path $testRoot 'stderr.log')
 $process.ProcessorAffinity = [IntPtr]((1 -shl [Math]::Min([Environment]::ProcessorCount, 4)) - 1)
@@ -64,7 +80,7 @@ if (!$process.WaitForExit(45000)) {
     throw "Test server timed out: $testRoot"
 }
 $output = Get-Content -LiteralPath (Join-Path $testRoot 'stdout.log') -Raw
-$output -split '\r?\n' | Where-Object { $_ -match '\[interiors\]|\[water\]|\[queries\]|\[groups\]|\[vehicles\]|\[smoke\]|\[optimization\]|\[rolling\]|3DAndreas|error|warning' } | Write-Output
+$output -split '\r?\n' | Where-Object { $_ -match '\[interiors\]|\[water\]|\[queries\]|\[groups\]|\[vehicles\]|\[smoke\]|\[optimization\]|\[rolling\]|\[wake\]|\[finite\]|\[restart\]|3DAndreas|error|warning' } | Write-Output
 $tag = ($Test -split '-')[0]
 $result = [regex]::Match($output, "\[$tag\] DONE checks (\d+) failures (\d+)")
 $counted = (Get-Content -LiteralPath (Join-Path $PSScriptRoot "$Test.pwn") -Raw) -match 'DONE checks'
