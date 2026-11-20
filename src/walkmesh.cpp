@@ -185,7 +185,7 @@ bool WalkMesh::random(const RoutePoint& at, float radius, float (*unit)(), Route
 	return false;
 }
 
-bool WalkMesh::path(const RoutePoint& from, const RoutePoint& to, std::vector<RoutePoint>& points, float& length) const {
+bool WalkMesh::path(const RoutePoint& from, const RoutePoint& to, std::vector<RoutePoint>& points, float& length, bool partial) const {
 	dtPolyRef startRef;
 	dtPolyRef endRef;
 	float start[3];
@@ -197,8 +197,15 @@ bool WalkMesh::path(const RoutePoint& from, const RoutePoint& to, std::vector<Ro
 	std::vector<dtPolyRef> polys(MaxPolys);
 	int count = 0;
 	dtStatus status = query_->findPath(startRef, endRef, start, end, &filter, polys.data(), &count, MaxPolys);
-	if (dtStatusFailed(status) || count == 0 || dtStatusDetail(status, DT_PARTIAL_RESULT) || polys[size_t(count - 1)] != endRef) {
+	if (dtStatusFailed(status) || count == 0) {
 		return false;
+	}
+	if (dtStatusDetail(status, DT_PARTIAL_RESULT) || polys[size_t(count - 1)] != endRef) {
+		float target[3];
+		dtVcopy(target, end);
+		if (!partial || dtStatusFailed(query_->closestPointOnPoly(polys[size_t(count - 1)], target, end, nullptr))) {
+			return false;
+		}
 	}
 	std::vector<float> corners(size_t(MaxPolys) * 3);
 	int cornerCount = 0;

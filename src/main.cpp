@@ -255,6 +255,20 @@ public:
 		return true;
 	}
 
+	int findWalkPath(Vector3 from, Vector3 to, Vector3* points, int size, bool partial) override {
+		State& s = state();
+		std::vector<RoutePoint> corners;
+		float length = 0.0f;
+		if (points == nullptr || size <= 0 || !s.walkMesh.ready() || !s.walkMesh.path({ from.x, from.y, from.z }, { to.x, to.y, to.z }, corners, length, partial)) {
+			return 0;
+		}
+		int count = std::min(int(corners.size()), size);
+		for (int index = 0; index != count; ++index) {
+			points[index] = Vector3(corners[size_t(index)].x, corners[size_t(index)].y, corners[size_t(index)].z);
+		}
+		return count;
+	}
+
 	void reset() override {
 		state().restarted = true;
 	}

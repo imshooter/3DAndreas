@@ -10,7 +10,8 @@
  * `nullptr` when 3DAndreas is not loaded. Every call reads the physics world
  * the server steps on its main thread, so it is made from that thread: in a
  * tick, an event or a native, never from a worker thread.
- * This interface keeps its original ABI: its queries include every interior.
+ * Its functions only grow at the end, so a component built against an older
+ * copy of this header keeps working. Its queries include every interior.
  */
 namespace A3D {
 
@@ -65,6 +66,21 @@ struct IComponent3DAndreas : public IComponent {
 	 * @return     `true` a surface was found, its height written to `z`
 	 */
 	virtual bool findGround(Vector3 point, float depth, int world, uint32_t flags, float& z) = 0;
+
+	/**
+	 * @brief      The shortest walk on the navigation mesh between two points
+	 *             on the ground, as the corners where it turns, the first one
+	 *             where it starts. It does not wait for the mesh to be read:
+	 *             until then there is no walk. The mesh is the map alone, the
+	 *             same in every virtual world.
+	 *
+	 * @param      partial  When the end cannot be reached, walk to the
+	 *                      reachable point nearest it.
+	 *
+	 * @return     The corners written to `points`, at most `size`, or `0`:
+	 *             no mesh, a point off it or no walk
+	 */
+	virtual int findWalkPath(Vector3 from, Vector3 to, Vector3* points, int size, bool partial) = 0;
 };
 
 }

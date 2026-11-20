@@ -251,7 +251,7 @@ navbuild world.db navmesh.db --threads 4
 
 ## Other components
 
-Other open.mp components can check lines of sight, cast rays and find the ground in C++ through [`include/3DAndreas.hpp`](include/3DAndreas.hpp), with `components->queryComponent<A3D::IComponent3DAndreas>()`. The [Other components](https://github.com/imshooter/3DAndreas/wiki/Other-Components) page of the wiki tells more.
+Other open.mp components can check lines of sight, cast rays, find the ground and find walks on the navigation mesh in C++ through [`include/3DAndreas.hpp`](include/3DAndreas.hpp), with `components->queryComponent<A3D::IComponent3DAndreas>()`. The [Other components](https://github.com/imshooter/3DAndreas/wiki/Other-Components) page of the wiki tells more.
 
 ## Building
 

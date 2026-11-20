@@ -72,10 +72,12 @@ public:
 	/**
 	 * @brief      The shortest walk between two points, as the corners where it turns.
 	 *
-	 * @return     - `true` the walk reaches the end
+	 * @param      partial  When the end cannot be reached, walk to the reachable point nearest it.
+	 *
+	 * @return     - `true` the walk reaches the end, or the point nearest it when `partial`
 	 *             - `false` a point is off the mesh, or the walk cannot reach the end
 	 */
-	bool path(const RoutePoint& from, const RoutePoint& to, std::vector<RoutePoint>& points, float& length) const;
+	bool path(const RoutePoint& from, const RoutePoint& to, std::vector<RoutePoint>& points, float& length, bool partial = false) const;
 
 	/**
 	 * @brief      Whether something stops a straight walk between two points, and where it stops. A
