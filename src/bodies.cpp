@@ -19,6 +19,7 @@ constexpr float PlayerHalfHeight = 0.55f;
 constexpr float PlayerRadius = 0.35f;
 constexpr int MaxStepsPerTick = 4;
 constexpr float MinimumReach = 0.1f;
+constexpr float MinimumTravel = 0.001f;
 constexpr float PlayerMass = 80.0f;
 constexpr float PlayerCatchUp = 1.0f;
 constexpr float PlayerLag = 1.0f;
@@ -230,15 +231,56 @@ void applyRollingFriction(float elapsed) {
 	}
 }
 
+void applyTravel(float elapsed) {
+	State& s = state();
+	JPH::BodyInterface& bodies = s.system->GetBodyInterface();
+	for (int index : s.travelling) {
+		Body& body = s.bodies[index];
+		body.travelled = std::min(body.travelled + body.travelSpeed * elapsed, body.travelLength);
+		float part = body.travelled / body.travelLength;
+		JPH::RVec3 position = body.travelFrom + (body.travelTo - body.travelFrom) * part;
+		bodies.MoveKinematic(body.id, position, body.travelTurnFrom.SLERP(body.travelTurnTo, part).Normalized(), elapsed);
+	}
+}
+
+void settleTravel(Body& body) {
+	JPH::BodyInterface& bodies = state().system->GetBodyInterface();
+	bodies.SetLinearAndAngularVelocity(body.id, JPH::Vec3::sZero(), JPH::Vec3::sZero());
+	if (body.kind == Kind::Static) {
+		bodies.SetMotionType(body.id, JPH::EMotionType::Static, JPH::EActivation::DontActivate);
+	}
+}
+
+void finishTravel() {
+	State& s = state();
+	JPH::BodyInterface& bodies = s.system->GetBodyInterface();
+	for (auto at = s.travelling.begin(); at != s.travelling.end();) {
+		Body& body = s.bodies[*at];
+		if (body.travelled < body.travelLength) {
+			++at;
+			continue;
+		}
+		bodies.SetPositionAndRotation(body.id, body.travelTo, body.travelTurnTo, JPH::EActivation::DontActivate);
+		settleTravel(body);
+		{
+			std::lock_guard<std::mutex> guard(s.eventLock);
+			s.arrivals.push_back({ *at, body.id });
+		}
+		at = s.travelling.erase(at);
+	}
+}
+
 void dispatchEvents() {
 	State& s = state();
 	std::vector<Collision> collisions;
 	std::vector<Stop> stops;
+	std::vector<Stop> arrivals;
 	std::vector<Crossing> crossings;
 	{
 		std::lock_guard<std::mutex> guard(s.eventLock);
 		collisions.swap(s.collisions);
 		stops.swap(s.stops);
+		arrivals.swap(s.arrivals);
 		crossings.swap(s.crossings);
 	}
 	JPH::BodyInterface& bodies = s.system->GetBodyInterface();
@@ -251,6 +293,16 @@ void dispatchEvents() {
 		Script* script = ownerOf(*zone);
 		if (script != nullptr) {
 			callPublic(*script, crossing.entered ? "A3D_OnEntered" : "A3D_OnLeft", { cell(crossing.zone), cell(crossing.phys) });
+		}
+	}
+	for (const Stop& arrival : arrivals) {
+		Body* body = findBody(arrival.phys);
+		if (body == nullptr || body->id != arrival.id) {
+			continue;
+		}
+		Script* script = ownerOf(*body);
+		if (script != nullptr) {
+			callPublic(*script, "A3D_OnMoved", { cell(arrival.phys) });
 		}
 	}
 	for (const Stop& stop : stops) {
@@ -361,6 +413,7 @@ int createBody(AMX* owner, const JPH::Shape* shape, int modelid, Vector3 positio
 	settings.mFriction = model != nullptr ? model->friction.value_or(0.5f) : 0.5f;
 	settings.mRestitution = !dynamic ? 1.0f : model != nullptr ? model->bounce.value_or(0.3f) : 0.3f;
 	settings.mIsSensor = zone;
+	settings.mAllowDynamicOrKinematic = kind == Kind::Static;
 	if (dynamic) {
 		settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
 		settings.mMassPropertiesOverride.mMass = mass > 0.0f ? mass : 1.0f;
@@ -423,6 +476,7 @@ bool destroyBody(int index) {
 	s.accelerated.erase(std::remove(s.accelerated.begin(), s.accelerated.end(), index), s.accelerated.end());
 	s.rolling.erase(std::remove(s.rolling.begin(), s.rolling.end(), index), s.rolling.end());
 	s.floating.erase(std::remove(s.floating.begin(), s.floating.end(), index), s.floating.end());
+	s.travelling.erase(std::remove(s.travelling.begin(), s.travelling.end(), index), s.travelling.end());
 	s.freeBodies.push_back(index);
 	return true;
 }
@@ -451,6 +505,51 @@ void setAcceleration(int index, JPH::Vec3Arg acceleration) {
 	if (!acceleration.IsNearZero()) {
 		s.accelerated.push_back(index);
 	}
+}
+
+cell travel(int index, JPH::RVec3Arg target, float speed, JPH::QuatArg rotation) {
+	State& s = state();
+	stopTravel(index);
+	Body& body = s.bodies[index];
+	JPH::BodyInterface& bodies = s.system->GetBodyInterface();
+	JPH::RVec3 position = bodies.GetPosition(body.id);
+	float length = float((target - position).Length());
+	bool pushes = body.kind != Kind::Zone;
+	if (pushes) {
+		wakeAround(body.id);
+	}
+	if (length < MinimumTravel) {
+		bodies.SetPositionAndRotation(body.id, target, rotation, JPH::EActivation::DontActivate);
+		if (pushes) {
+			wakeAround(body.id);
+		}
+		std::lock_guard<std::mutex> guard(s.eventLock);
+		s.arrivals.push_back({ index, body.id });
+		return 0;
+	}
+	body.travelFrom = position;
+	body.travelTo = target;
+	body.travelTurnFrom = bodies.GetRotation(body.id);
+	body.travelTurnTo = rotation;
+	body.travelLength = length;
+	body.travelled = 0.0f;
+	body.travelSpeed = speed;
+	if (body.kind == Kind::Static) {
+		bodies.SetMotionType(body.id, JPH::EMotionType::Kinematic, JPH::EActivation::Activate);
+	}
+	s.travelling.push_back(index);
+	return cell(std::lround(length / speed * 1000.0f));
+}
+
+bool stopTravel(int index) {
+	State& s = state();
+	auto found = std::find(s.travelling.begin(), s.travelling.end(), index);
+	if (found == s.travelling.end()) {
+		return false;
+	}
+	s.travelling.erase(found);
+	settleTravel(s.bodies[index]);
+	return true;
 }
 
 void forgetScript(AMX* amx) {
@@ -499,7 +598,9 @@ void step(double elapsed) {
 	updateActors(delta);
 	applyAccelerations();
 	applyBuoyancy(delta);
+	applyTravel(delta);
 	s.system->Update(delta, steps, s.temp.get(), s.jobs.get());
+	finishTravel();
 	applyRollingFriction(delta);
 	syncBodies();
 	s.milliseconds += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();

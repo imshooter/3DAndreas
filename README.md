@@ -13,12 +13,12 @@ Physics objects moved by 3DAndreas, recorded in the game on an open.mp server. T
 
 ## Features
 
-- **Physics objects.** Spheres, boxes and objects shaped like a model fall, roll, bounce, float and push each other. Players see them as objects the component moves, with at most `max_updates` updates a second, so even a rain of hundreds of objects never floods a client. Static objects and zones never move and make walls, tables and goals.
+- **Physics objects.** Spheres, boxes and objects shaped like a model fall, roll, bounce, float and push each other. Players see them as objects the component moves, with at most `max_updates` updates a second, so even a rain of hundreds of objects never floods a client. Static objects and zones make walls, tables and goals, and `A3D_MoveObject` moves them the way `MoveObject` moves an object, carrying what rests on them, for gates and lifts.
 - **Model settings.** `models.json` gives the shape, mass, friction, bounce and more to 203 models, from balls to weapons, so `A3D_CreateObject(1946, x, y, z)` makes a basketball that bounces like one. Every other model gets a mass from its volume and a friction and bounce from what its collision is made of.
 - **World queries.** Rays give the point, the normal, the model and the surface of the game they hit. There are rays that return every hit, line of sight, ground height, sphere sweeps and the overlaps of a sphere, a box or a model.
 - **Worlds and interiors.** Bodies and queries belong to a virtual world and an interior, so two houses built on the same interior never touch. Players and vehicles follow theirs, the map keeps the interior of each of its pieces, and `A3D_SetInterior` moves a body to another one. The `interiorid` of every native is optional and `-1` means every interior, so older scripts work as before.
 - **Players, vehicles and actors.** Players on foot and actors are capsules and vehicles are boxes that move with them, so objects bounce off them and queries find them. A player pushes a pile of crates the way a person would, without throwing them. Searches in a sphere or a cone can require line of sight, and the camera of a player gives what they look at.
-- **The map.** Water levels, points under water or inside the collision of the map, free spots on the ground, predicted throws, the size and the `object.dat` data of models, and building removal for every virtual world or for one.
+- **The map.** Water levels, points under water or inside the collision of the map, free spots on the ground, predicted throws, the size of models turned any way and their `object.dat` data, building removal for every virtual world or for one, and the collision of custom models, read from their .dff files.
 - **The screen.** Where a point of the world shows on the screen of a player, and what a point of the screen shows, in text draw units.
 - **Geometry.** The rotation that stands an object on a slope, reflections, offsets relative to objects and vehicles, the parts of a vehicle, and quaternions.
 - **Routes.** The fastest or shortest way by road, keeping to the one way streets of the game, or driving them both ways for the emergency services, on the roads the traffic drives, by boat and on foot. Each route is found in some tens of microseconds by contraction hierarchies, pays for its turns, and gives its points, turn by turn directions and the progress of a player along it. One search finds the nearest of many places by road.
@@ -241,6 +241,8 @@ phydb "C:\Games\GTA San Andreas" world.db
 
 `--no-samp` after the output leaves out the models of the SA-MP client. A ColAndreas database still loads as a fallback, without surfaces, water, model data and routes.
 
+Custom models added with `AddSimpleModel` are not in the database. Each one collides with the collision its .dff file holds, as the client does, read from the folder of `artwork.models_path` the first time a native asks for the model. A model whose file holds none has no collision.
+
 `navbuild` makes the navigation mesh from the database, in about a minute on four threads:
 
 ```
@@ -289,6 +291,9 @@ The scripts in [`tests`](tests) run as the main script, print what they check an
 | [`colandreas.pwn`](tests/colandreas.pwn) | The comparison above. Compiled with `BENCH_COLANDREAS` defined, it runs the same queries on ColAndreas. |
 | [`routes.pwn`](tests/routes.pwn) | Routes of every type, their points, turns and progress, measures, the nearest place by road, ids that do not exist and the cost of each native. |
 | [`walks.pwn`](tests/walks.pwn) | The navigation mesh: walk points, random points, straight walks and walks. Needs `navmesh.db`. |
+| [`issues.pwn`](tests/issues.pwn) | The cases reported against ColAndreas: water above dry ground, the open sea, ground under an object at 1687 metres, removals of every model, the box of a turned model and ids that do not exist. |
+| [`moving.pwn`](tests/moving.pwn) | `A3D_MoveObject`: a platform that rises with a crate on it, arrives, turns, stops, and a zone moved over a resting crate. |
+| [`custom.pwn`](tests/custom.pwn) | The collision of custom models from their .dff files, a file without one, and a model asked for before it is added. Needs the model files named at its top in the models folder. |
 | [`compare.pwn`](tests/compare.pwn) | The comparison of routes above. Needs samp-gps-plugin with its `GPS.dat`, and its `INVALID_PATH_ID` renamed, as it clashes with open.mp. |
 
 On Windows, `run-interiors.ps1` runs the interior tests in a new server in a temporary folder, on port 7819, with the compiler, components and `world.db` of the server given, and fails when a check fails:
@@ -298,6 +303,13 @@ On Windows, `run-interiors.ps1` runs the interior tests in a new server in a tem
 ```
 
 `-ContactCache` runs them with the contact cache on, `-Test water`, `-Test wake` and `-Test finite` run those tests, `-Test restart -Side restart-side` runs the restart test with its side script, and `-Test interiors-legacy -LegacyInclude` runs the old natives against a server that still holds the include of 0.7.2. Water decides what is under it in the world of the query and every interior, so a pool high in a building does not flood the street under its floor. The C++ interface checks every interior.
+
+From Git Bash, [`run.sh`](tests/run.sh) runs any test the same way, with the models folder of the server for `custom.pwn`, and [`compare.sh`](tests/compare.sh) runs tests on the installed and the fresh build and shows where their output differs:
+
+```
+SERVER=/c/path/to/server tests/run.sh moving
+SERVER=/c/path/to/server tests/compare.sh water wake features
+```
 
 ## Thanks to
 

@@ -153,155 +153,19 @@ bool take(const std::vector<char>& data, size_t at, T& value) {
 	return true;
 }
 
-struct Collision {
-	std::string name;
-	uint16_t id = 0;
-	Model model;
-};
-
-bool readFirstVersion(const std::vector<char>& data, size_t at, size_t end, Model& model) {
-	float bounds[10];
-	if (!take(data, at, bounds)) {
-		return false;
-	}
-	model.bounds = { bounds[4], bounds[5], bounds[6], bounds[7], bounds[8], bounds[9], bounds[1], bounds[2], bounds[3], bounds[0] };
-	at += 40;
-	uint32_t count;
-	if (!take(data, at, count)) {
-		return false;
-	}
-	at += 4;
-	for (uint32_t index = 0; index != count; ++index, at += 20) {
-		float sphere[4];
-		uint8_t material;
-		if (!take(data, at, sphere) || !take(data, at + 16, material)) {
-			return false;
-		}
-		model.spheres.push_back({ sphere[1], sphere[2], sphere[3], sphere[0], material });
-	}
-	at += 4;
-	if (!take(data, at, count)) {
-		return false;
-	}
-	at += 4;
-	for (uint32_t index = 0; index != count; ++index, at += 28) {
-		float box[6];
-		uint8_t material;
-		if (!take(data, at, box) || !take(data, at + 24, material)) {
-			return false;
-		}
-		model.boxes.push_back({ box[0], box[1], box[2], box[3], box[4], box[5], material });
-	}
-	if (!take(data, at, count)) {
-		return false;
-	}
-	at += 4;
-	for (uint32_t index = 0; index != count; ++index, at += 12) {
-		float vertex[3];
-		if (!take(data, at, vertex)) {
-			return false;
-		}
-		model.vertices.push_back({ int16_t(std::lround(vertex[0] * VertexScale)), int16_t(std::lround(vertex[1] * VertexScale)), int16_t(std::lround(vertex[2] * VertexScale)) });
-	}
-	if (!take(data, at, count)) {
-		return false;
-	}
-	at += 4;
-	for (uint32_t index = 0; index != count; ++index, at += 16) {
-		uint32_t corners[3];
-		uint8_t material;
-		if (!take(data, at, corners) || !take(data, at + 12, material) || at + 16 > end) {
-			return false;
-		}
-		model.faces.push_back({ uint16_t(corners[0]), uint16_t(corners[1]), uint16_t(corners[2]), material });
-	}
-	return true;
-}
-
-bool readLaterVersion(const std::vector<char>& data, size_t start, Model& model) {
-	size_t at = start + 32;
-	float bounds[10];
-	if (!take(data, at, bounds)) {
-		return false;
-	}
-	model.bounds = { bounds[0], bounds[1], bounds[2], bounds[3], bounds[4], bounds[5], bounds[6], bounds[7], bounds[8], bounds[9] };
-	at += 40;
-	uint16_t spheres;
-	uint16_t boxes;
-	uint16_t faces;
-	uint32_t offsets[6];
-	if (!take(data, at, spheres) || !take(data, at + 2, boxes) || !take(data, at + 4, faces) || !take(data, at + 12, offsets)) {
-		return false;
-	}
-	size_t base = start + 4;
-	for (uint16_t index = 0; index != spheres; ++index) {
-		float sphere[4];
-		uint8_t material;
-		size_t place = base + offsets[0] + index * 20;
-		if (!take(data, place, sphere) || !take(data, place + 16, material)) {
-			return false;
-		}
-		model.spheres.push_back({ sphere[0], sphere[1], sphere[2], sphere[3], material });
-	}
-	for (uint16_t index = 0; index != boxes; ++index) {
-		float box[6];
-		uint8_t material;
-		size_t place = base + offsets[1] + index * 28;
-		if (!take(data, place, box) || !take(data, place + 24, material)) {
-			return false;
-		}
-		model.boxes.push_back({ box[0], box[1], box[2], box[3], box[4], box[5], material });
-	}
-	int top = -1;
-	for (uint16_t index = 0; index != faces; ++index) {
-		uint16_t corners[3];
-		uint8_t material;
-		size_t place = base + offsets[4] + index * 8;
-		if (!take(data, place, corners) || !take(data, place + 6, material)) {
-			return false;
-		}
-		model.faces.push_back({ corners[0], corners[1], corners[2], material });
-		top = std::max({ top, int(corners[0]), int(corners[1]), int(corners[2]) });
-	}
-	for (int index = 0; index <= top; ++index) {
-		int16_t vertex[3];
-		if (!take(data, base + offsets[3] + size_t(index) * 6, vertex)) {
-			return false;
-		}
-		model.vertices.push_back({ vertex[0], vertex[1], vertex[2] });
-	}
-	return true;
-}
-
-void readCollisionFile(const std::vector<char>& data, std::vector<Collision>& found) {
+void readCollisionFile(const std::vector<char>& data, std::vector<CollisionEntry>& found) {
 	size_t at = 0;
 	while (at + 32 <= data.size()) {
-		int version = 0;
-		if (std::memcmp(data.data() + at, "COLL", 4) == 0) {
-			version = 1;
-		} else if (std::memcmp(data.data() + at, "COL2", 4) == 0) {
-			version = 2;
-		} else if (std::memcmp(data.data() + at, "COL3", 4) == 0) {
-			version = 3;
-		} else if (std::memcmp(data.data() + at, "COL4", 4) == 0) {
-			version = 4;
-		} else {
+		CollisionEntry entry;
+		size_t used;
+		bool read = readCollision(data.data() + at, data.size() - at, entry, used);
+		if (used == 0) {
 			return;
 		}
-		uint32_t size;
-		take(data, at + 4, size);
-		size_t end = at + 8 + size;
-		if (end > data.size()) {
-			return;
-		}
-		Collision collision;
-		collision.name = lower(std::string(data.data() + at + 8, strnlen(data.data() + at + 8, 22)));
-		take(data, at + 30, collision.id);
-		bool read = version == 1 ? readFirstVersion(data, at + 32, end, collision.model) : readLaterVersion(data, at, collision.model);
 		if (read) {
-			found.push_back(std::move(collision));
+			found.push_back(std::move(entry));
 		}
-		at = end;
+		at += used;
 	}
 }
 
@@ -737,9 +601,9 @@ int main(int argc, char** argv) {
 				continue;
 			}
 			++collisionFiles;
-			std::vector<Collision> found;
+			std::vector<CollisionEntry> found;
 			readCollisionFile(readEntry(archive, entry.second), found);
-			for (Collision& collision : found) {
+			for (CollisionEntry& collision : found) {
 				if (collision.name.find("lod") != std::string::npos) {
 					continue;
 				}

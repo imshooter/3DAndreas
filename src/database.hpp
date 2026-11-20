@@ -112,6 +112,15 @@ struct Model {
 };
 
 /**
+ * @brief      One model of a collision file of the game, with the name and id the file gives it.
+ */
+struct CollisionEntry {
+	std::string name;
+	uint16_t id = 0;
+	Model model;
+};
+
+/**
  * @brief      A map object placed by the game, with the interior and the rotation of its IPL file.
  */
 struct Placement {
@@ -231,6 +240,23 @@ bool writeDatabase(const std::string& path, const Database& database);
  * @brief      Work out the bounds of a model from its spheres, boxes and vertices.
  */
 Bounds measureModel(const Model& model);
+
+/**
+ * @brief      Read one entry of a collision file, from COLL to COL4, as the archives of the game and
+ *             the collision plugin of a model file hold it. Every count, offset and vertex index is
+ *             checked against the entry, so the data may come from anywhere.
+ *
+ * @param      data   The entry, which starts with its version.
+ * @param      size   Bytes from `data` on.
+ * @param      used   Bytes the entry takes, or `0` when its header is cut short or of no known
+ *                    version, which ends the file. Model files often give a size that runs past
+ *                    the data, so an entry is read from what there is.
+ *
+ * @return     - `true` the entry was read, with the bounds of its header
+ *             - `false` it is cut short, of no known version, or holds a value that is not finite or a
+ *               face with a vertex it does not have
+ */
+bool readCollision(const char* data, size_t size, CollisionEntry& entry, size_t& used);
 
 /**
  * @brief      Weld the vertices of a model that lie at the same place, drop faces without area and

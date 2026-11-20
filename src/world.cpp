@@ -16,6 +16,8 @@
 #include <atomic>
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
+#include <fstream>
 #include <iterator>
 #include <thread>
 
@@ -27,6 +29,10 @@ constexpr JPH::ObjectLayer StaticLayer = 0;
 constexpr JPH::ObjectLayer MovingLayer = 1;
 constexpr JPH::ObjectLayer PlayerLayer = 2;
 constexpr JPH::ObjectLayer LayerCount = 3;
+constexpr uint32_t ClumpChunk = 0x10;
+constexpr uint32_t ExtensionChunk = 0x03;
+constexpr uint32_t CollisionChunk = 0x0253F2FF;
+constexpr int CollisionChunkDepth = 2;
 
 const JPH::BroadPhaseLayer StaticBroadPhase(0);
 const JPH::BroadPhaseLayer MovingBroadPhase(1);
@@ -349,6 +355,54 @@ void buildPlacedShapes() {
 	}
 }
 
+bool findCollisionChunk(const std::vector<char>& data, size_t at, size_t end, int depth, size_t& begin, size_t& size) {
+	while (end - at >= 12) {
+		uint32_t header[3];
+		std::memcpy(header, data.data() + at, sizeof header);
+		size_t inner = at + 12;
+		if (header[1] > end - inner) {
+			return false;
+		}
+		if (header[0] == CollisionChunk) {
+			begin = inner;
+			size = header[1];
+			return true;
+		}
+		if ((header[0] == ClumpChunk || header[0] == ExtensionChunk) && depth != CollisionChunkDepth && findCollisionChunk(data, inner, inner + header[1], depth + 1, begin, size)) {
+			return true;
+		}
+		at = inner + header[1];
+	}
+	return false;
+}
+
+}
+
+const Model* findModel(int modelid) {
+	State& s = state();
+	auto found = s.models.find(modelid);
+	if (found != s.models.end()) {
+		return &found->second;
+	}
+	StringView dff;
+	StringView txd;
+	if (s.customModels == nullptr || s.customWithoutCollision.count(modelid) != 0 || !s.customModels->getCustomModelPath(modelid, dff, txd)) {
+		return nullptr;
+	}
+	StringView folder = s.core->getConfig().getString("artwork.models_path");
+	std::string path = folder.empty() ? std::string(dff.data(), dff.size()) : std::string(folder.data(), folder.size()) + "/" + std::string(dff.data(), dff.size());
+	std::ifstream file(path, std::ios::binary);
+	std::vector<char> data((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+	size_t begin;
+	size_t size;
+	CollisionEntry entry;
+	size_t used;
+	if (!findCollisionChunk(data, 0, data.size(), 0, begin, size) || !readCollision(data.data() + begin, size, entry, used)) {
+		s.customWithoutCollision.insert(modelid);
+		return nullptr;
+	}
+	cleanModel(entry.model);
+	return &s.models.emplace(modelid, std::move(entry.model)).first->second;
 }
 
 State& state() {
@@ -545,8 +599,11 @@ JPH::ShapeRefC staticShape(int modelid) {
 	if (cached != s.staticShapes.end()) {
 		return cached->second;
 	}
-	auto model = s.models.find(modelid);
-	JPH::ShapeRefC shape = model == s.models.end() ? nullptr : buildStatic(model->second);
+	const Model* model = findModel(modelid);
+	if (model == nullptr) {
+		return nullptr;
+	}
+	JPH::ShapeRefC shape = buildStatic(*model);
 	s.staticShapes.emplace(modelid, shape);
 	return shape;
 }
@@ -557,13 +614,15 @@ JPH::ShapeRefC dynamicShape(int modelid) {
 	if (cached != s.dynamicShapes.end()) {
 		return cached->second;
 	}
-	auto model = s.models.find(modelid);
+	const Model* model = findModel(modelid);
 	const ModelSettings* settings = findModelSettings(modelid);
 	JPH::ShapeRefC shape;
 	if (settings != nullptr && settings->shape != ModelShape::Collision) {
-		shape = buildDescribed(*settings, model == s.models.end() ? 0 : firstSurface(model->second));
-	} else if (model != s.models.end()) {
-		shape = buildDynamic(model->second);
+		shape = buildDescribed(*settings, model == nullptr ? 0 : firstSurface(*model));
+	} else if (model != nullptr) {
+		shape = buildDynamic(*model);
+	} else {
+		return nullptr;
 	}
 	s.dynamicShapes.emplace(modelid, shape);
 	return shape;

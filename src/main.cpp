@@ -161,6 +161,7 @@ public:
 		if (s.actors != nullptr) {
 			s.actors->getPoolEventDispatcher().addEventHandler(this);
 		}
+		s.customModels = components->queryComponent<ICustomModelsComponent>();
 	}
 
 	void onAmxLoad(IPawnScript& script) override {
@@ -215,6 +216,9 @@ public:
 		if (component == s.actors) {
 			s.actors->getPoolEventDispatcher().removeEventHandler(this);
 			s.actors = nullptr;
+		}
+		if (component == s.customModels) {
+			s.customModels = nullptr;
 		}
 		if (component == s.pawn && s.pawn != nullptr) {
 			s.pawn->getEventDispatcher().removeEventHandler(this);
@@ -273,6 +277,7 @@ public:
 			s.actors->getPoolEventDispatcher().removeEventHandler(this);
 			s.actors = nullptr;
 		}
+		s.customModels = nullptr;
 		for (int vehicleid = 0; vehicleid != int(s.vehicleBodies.size()); ++vehicleid) {
 			removeVehicle(vehicleid);
 		}

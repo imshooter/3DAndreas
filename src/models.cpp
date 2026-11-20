@@ -720,12 +720,12 @@ const ModelSettings& modelValues(int modelid, const JPH::Shape& shape) {
 	}
 	const ModelSettings* described = findModelSettings(modelid);
 	ModelSettings values = described != nullptr ? *described : ModelSettings();
-	auto model = s.models.find(modelid);
-	Substance substance = model == s.models.end() ? Substance::Unknown : substanceOf(model->second);
+	const Model* model = findModel(modelid);
+	Substance substance = model == nullptr ? Substance::Unknown : substanceOf(*model);
 	const SubstanceValues& estimate = Substances[size_t(substance)];
 	float volume = shape.GetVolume();
-	if (values.shape == ModelShape::Collision && model != s.models.end() && model->second.faces.empty()) {
-		volume = std::min(volume, partsVolume(model->second));
+	if (values.shape == ModelShape::Collision && model != nullptr && model->faces.empty()) {
+		volume = std::min(volume, partsVolume(*model));
 	}
 	if (!values.mass && volume > 0.0f) {
 		values.mass = std::clamp(volume * estimate.density, MinimumMass, MaximumMass);

@@ -64,6 +64,8 @@ bool writeVector(AMX* amx, const cell* params, int index, Vector3 value) {
 
 namespace {
 
+constexpr float KeepRotation = -1000.0f;
+
 Body* movingBody(const cell* params) {
 	Body* body = findBody(params[1]);
 	return body != nullptr && body->kind == Kind::Object ? body : nullptr;
@@ -354,6 +356,7 @@ cell AMX_NATIVE_CALL A3D_SetPosition(AMX* amx, const cell* params) {
 	if (body == nullptr || !finite(position)) {
 		return false;
 	}
+	stopTravel(params[1]);
 	if (body->kind != Kind::Zone) {
 		wakeAround(body->id);
 	}
@@ -379,6 +382,7 @@ cell AMX_NATIVE_CALL A3D_SetRotation(AMX* amx, const cell* params) {
 	if (body == nullptr || !finite(rotation)) {
 		return false;
 	}
+	stopTravel(params[1]);
 	if (body->kind != Kind::Zone) {
 		wakeAround(body->id);
 	}
@@ -450,8 +454,36 @@ cell AMX_NATIVE_CALL A3D_SetSyncError(AMX* amx, const cell* params) {
 }
 
 cell AMX_NATIVE_CALL A3D_IsMoving(AMX* amx, const cell* params) {
-	Body* body = movingBody(params);
-	return body != nullptr && bodies().IsActive(body->id);
+	State& s = state();
+	Body* body = findBody(params[1]);
+	if (body == nullptr) {
+		return false;
+	}
+	if (body->kind != Kind::Object) {
+		return std::find(s.travelling.begin(), s.travelling.end(), params[1]) != s.travelling.end();
+	}
+	return bodies().IsActive(body->id);
+}
+
+cell AMX_NATIVE_CALL A3D_MoveObject(AMX* amx, const cell* params) {
+	Body* body = findBody(params[1]);
+	Vector3 target = readVector(params, 2);
+	float speed = readFloat(params, 5);
+	Vector3 rotation(optionalFloat(params, 6, KeepRotation), optionalFloat(params, 7, KeepRotation), optionalFloat(params, 8, KeepRotation));
+	if (body == nullptr || body->kind == Kind::Object || !finite(target) || !finite(speed) || speed <= 0.0f || !finite(rotation)) {
+		return 0;
+	}
+	Vector3 current = toEuler(bodies().GetRotation(body->id));
+	for (int axis = 0; axis != 3; ++axis) {
+		if (rotation[axis] == KeepRotation) {
+			rotation[axis] = current[axis];
+		}
+	}
+	return travel(params[1], JPH::RVec3(target.x, target.y, target.z), speed, toJolt(rotation));
+}
+
+cell AMX_NATIVE_CALL A3D_StopObject(AMX* amx, const cell* params) {
+	return findBody(params[1]) != nullptr && stopTravel(params[1]);
 }
 
 cell AMX_NATIVE_CALL A3D_GetObjectID(AMX* amx, const cell* params) {
@@ -544,6 +576,8 @@ const AMX_NATIVE_INFO natives[] = {
 	{ "A3D_SetBuoyancy", A3D_SetBuoyancy },
 	{ "A3D_SetSyncError", A3D_SetSyncError },
 	{ "A3D_IsMoving", A3D_IsMoving },
+	{ "A3D_MoveObject", A3D_MoveObject },
+	{ "A3D_StopObject", A3D_StopObject },
 	{ "A3D_GetObjectID", A3D_GetObjectID },
 	{ "A3D_AttachDynamicObject", A3D_AttachDynamicObject },
 	{ "A3D_SetExtra", A3D_SetExtra },

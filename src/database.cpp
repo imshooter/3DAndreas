@@ -1,6 +1,7 @@
 #include "database.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 #include <fstream>
@@ -402,6 +403,156 @@ bool readColAndreas(Reader& reader, Database& database) {
 	return true;
 }
 
+template <typename T>
+bool take(const char* data, size_t end, size_t at, T& value) {
+	if (at > end || sizeof(T) > end - at) {
+		return false;
+	}
+	std::memcpy(&value, data + at, sizeof(T));
+	return true;
+}
+
+bool readFirstCollision(const char* data, size_t end, Model& model) {
+	float bounds[10];
+	if (!take(data, end, 32, bounds) || !finite(bounds[0], bounds[1], bounds[2], bounds[3], bounds[4], bounds[5], bounds[6], bounds[7], bounds[8], bounds[9])) {
+		return false;
+	}
+	model.bounds = { bounds[4], bounds[5], bounds[6], bounds[7], bounds[8], bounds[9], bounds[1], bounds[2], bounds[3], bounds[0] };
+	size_t at = 72;
+	uint32_t count;
+	if (!take(data, end, at, count) || count > (end - at - 4) / 20) {
+		return false;
+	}
+	at += 4;
+	for (uint32_t index = 0; index != count; ++index, at += 20) {
+		float sphere[4];
+		uint8_t material;
+		if (!take(data, end, at, sphere) || !take(data, end, at + 16, material) || !finite(sphere[0], sphere[1], sphere[2], sphere[3])) {
+			return false;
+		}
+		model.spheres.push_back({ sphere[1], sphere[2], sphere[3], sphere[0], material });
+	}
+	at += 4;
+	if (!take(data, end, at, count) || count > (end - at - 4) / 28) {
+		return false;
+	}
+	at += 4;
+	for (uint32_t index = 0; index != count; ++index, at += 28) {
+		float box[6];
+		uint8_t material;
+		if (!take(data, end, at, box) || !take(data, end, at + 24, material) || !finite(box[0], box[1], box[2], box[3], box[4], box[5])) {
+			return false;
+		}
+		model.boxes.push_back({ box[0], box[1], box[2], box[3], box[4], box[5], material });
+	}
+	if (!take(data, end, at, count) || count > (end - at - 4) / 12 || count > 65536) {
+		return false;
+	}
+	at += 4;
+	for (uint32_t index = 0; index != count; ++index, at += 12) {
+		float vertex[3];
+		if (!take(data, end, at, vertex) || !finite(vertex[0], vertex[1], vertex[2])) {
+			return false;
+		}
+		model.vertices.push_back({ quantise(vertex[0]), quantise(vertex[1]), quantise(vertex[2]) });
+	}
+	if (!take(data, end, at, count) || count > (end - at - 4) / 16) {
+		return false;
+	}
+	at += 4;
+	for (uint32_t index = 0; index != count; ++index, at += 16) {
+		uint32_t corners[3];
+		uint8_t material;
+		if (!take(data, end, at, corners) || !take(data, end, at + 12, material)) {
+			return false;
+		}
+		if (corners[0] >= model.vertices.size() || corners[1] >= model.vertices.size() || corners[2] >= model.vertices.size()) {
+			return false;
+		}
+		model.faces.push_back({ uint16_t(corners[0]), uint16_t(corners[1]), uint16_t(corners[2]), material });
+	}
+	return true;
+}
+
+bool readLaterCollision(const char* data, size_t end, Model& model) {
+	float bounds[10];
+	if (!take(data, end, 32, bounds) || !finite(bounds[0], bounds[1], bounds[2], bounds[3], bounds[4], bounds[5], bounds[6], bounds[7], bounds[8], bounds[9])) {
+		return false;
+	}
+	model.bounds = { bounds[0], bounds[1], bounds[2], bounds[3], bounds[4], bounds[5], bounds[6], bounds[7], bounds[8], bounds[9] };
+	uint16_t spheres;
+	uint16_t boxes;
+	uint16_t faces;
+	uint32_t offsets[6];
+	if (!take(data, end, 72, spheres) || !take(data, end, 74, boxes) || !take(data, end, 76, faces) || !take(data, end, 84, offsets)) {
+		return false;
+	}
+	for (uint16_t index = 0; index != spheres; ++index) {
+		float sphere[4];
+		uint8_t material;
+		size_t place = 4 + size_t(offsets[0]) + size_t(index) * 20;
+		if (!take(data, end, place, sphere) || !take(data, end, place + 16, material) || !finite(sphere[0], sphere[1], sphere[2], sphere[3])) {
+			return false;
+		}
+		model.spheres.push_back({ sphere[0], sphere[1], sphere[2], sphere[3], material });
+	}
+	for (uint16_t index = 0; index != boxes; ++index) {
+		float box[6];
+		uint8_t material;
+		size_t place = 4 + size_t(offsets[1]) + size_t(index) * 28;
+		if (!take(data, end, place, box) || !take(data, end, place + 24, material) || !finite(box[0], box[1], box[2], box[3], box[4], box[5])) {
+			return false;
+		}
+		model.boxes.push_back({ box[0], box[1], box[2], box[3], box[4], box[5], material });
+	}
+	int top = -1;
+	for (uint16_t index = 0; index != faces; ++index) {
+		uint16_t corners[3];
+		uint8_t material;
+		size_t place = 4 + size_t(offsets[4]) + size_t(index) * 8;
+		if (!take(data, end, place, corners) || !take(data, end, place + 6, material)) {
+			return false;
+		}
+		model.faces.push_back({ corners[0], corners[1], corners[2], material });
+		top = std::max({ top, int(corners[0]), int(corners[1]), int(corners[2]) });
+	}
+	for (int index = 0; index <= top; ++index) {
+		int16_t vertex[3];
+		if (!take(data, end, 4 + size_t(offsets[3]) + size_t(index) * 6, vertex)) {
+			return false;
+		}
+		model.vertices.push_back({ vertex[0], vertex[1], vertex[2] });
+	}
+	return true;
+}
+
+}
+
+bool readCollision(const char* data, size_t size, CollisionEntry& entry, size_t& used) {
+	used = 0;
+	if (size < 32) {
+		return false;
+	}
+	int version = 0;
+	if (std::memcmp(data, "COLL", 4) == 0) {
+		version = 1;
+	} else if (std::memcmp(data, "COL2", 4) == 0) {
+		version = 2;
+	} else if (std::memcmp(data, "COL3", 4) == 0) {
+		version = 3;
+	} else if (std::memcmp(data, "COL4", 4) == 0) {
+		version = 4;
+	} else {
+		return false;
+	}
+	uint32_t length;
+	take(data, size, 4, length);
+	used = std::min(8 + size_t(length), size);
+	entry.name.assign(data + 8, strnlen(data + 8, 22));
+	std::transform(entry.name.begin(), entry.name.end(), entry.name.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+	take(data, used, 30, entry.id);
+	entry.model = Model();
+	return version == 1 ? readFirstCollision(data, used, entry.model) : readLaterCollision(data, used, entry.model);
 }
 
 Bounds measureModel(const Model& model) {

@@ -10,12 +10,6 @@ namespace {
 
 constexpr float GameFrames = 50.0f;
 
-const Model* modelOf(int modelid) {
-	State& s = state();
-	auto found = s.models.find(modelid);
-	return found == s.models.end() ? nullptr : &found->second;
-}
-
 bool nearPlacement(uint32_t index, int modelid, Vector3 centre, float radius, int interior) {
 	State& s = state();
 	const Placement& placement = s.placements[index];
@@ -152,18 +146,27 @@ cell AMX_NATIVE_CALL A3D_IsPointInWater(AMX* amx, const cell* params) {
 }
 
 cell AMX_NATIVE_CALL A3D_GetModelBoundingBox(AMX* amx, const cell* params) {
-	const Model* model = modelOf(params[1]);
-	if (model == nullptr) {
+	const Model* model = findModel(params[1]);
+	Vector3 rotation(optionalFloat(params, 8, 0.0f), optionalFloat(params, 9, 0.0f), optionalFloat(params, 10, 0.0f));
+	if (model == nullptr || !finite(rotation)) {
 		return false;
 	}
 	const Bounds& bounds = model->bounds;
-	writeVector(amx, params, 2, Vector3(bounds.minX, bounds.minY, bounds.minZ));
-	writeVector(amx, params, 5, Vector3(bounds.maxX, bounds.maxY, bounds.maxZ));
+	JPH::Quat turn = toJolt(rotation);
+	JPH::Vec3 low = JPH::Vec3::sReplicate(1e30f);
+	JPH::Vec3 high = JPH::Vec3::sReplicate(-1e30f);
+	for (int corner = 0; corner != 8; ++corner) {
+		JPH::Vec3 point = turn * JPH::Vec3((corner & 1) ? bounds.maxX : bounds.minX, (corner & 2) ? bounds.maxY : bounds.minY, (corner & 4) ? bounds.maxZ : bounds.minZ);
+		low = JPH::Vec3::sMin(low, point);
+		high = JPH::Vec3::sMax(high, point);
+	}
+	writeVector(amx, params, 2, Vector3(low.GetX(), low.GetY(), low.GetZ()));
+	writeVector(amx, params, 5, Vector3(high.GetX(), high.GetY(), high.GetZ()));
 	return true;
 }
 
 cell AMX_NATIVE_CALL A3D_GetModelBoundingSphere(AMX* amx, const cell* params) {
-	const Model* model = modelOf(params[1]);
+	const Model* model = findModel(params[1]);
 	if (model == nullptr) {
 		return false;
 	}
@@ -174,7 +177,7 @@ cell AMX_NATIVE_CALL A3D_GetModelBoundingSphere(AMX* amx, const cell* params) {
 }
 
 cell AMX_NATIVE_CALL A3D_GetModelPhysics(AMX* amx, const cell* params) {
-	const Model* model = modelOf(params[1]);
+	const Model* model = findModel(params[1]);
 	if (model == nullptr || (model->flags & ModelDynamic) == 0) {
 		return false;
 	}

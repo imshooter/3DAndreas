@@ -15,11 +15,13 @@
 #include <random>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include <sdk.hpp>
 #include <Server/Components/Actors/actors.hpp>
+#include <Server/Components/CustomModels/custommodels.hpp>
 #include <Server/Components/Objects/objects.hpp>
 #include <Server/Components/Pawn/pawn.hpp>
 #include <Server/Components/Vehicles/vehicles.hpp>
@@ -146,6 +148,8 @@ struct Context {
  * over the last syncs, which tells where a sliding body stops. `offset` is how far the client was from
  * the body when the last move went out, which the move takes away as it runs.
  * `reach` is how far the shape reaches from its centre, which turns an angle into a distance.
+ * A static object or zone that `A3D_MoveObject` moves goes from `travelFrom` to `travelTo` and turns
+ * from `travelTurnFrom` to `travelTurnTo`, `travelled` of `travelLength` metres at `travelSpeed`.
  */
 struct Body {
 	JPH::BodyID id;
@@ -179,6 +183,13 @@ struct Body {
 	float buoyancy = 0.0f;
 	float drag = 1.0f;
 	std::array<cell, ExtraSlots> extra = {};
+	JPH::RVec3 travelFrom = JPH::RVec3::sZero();
+	JPH::RVec3 travelTo = JPH::RVec3::sZero();
+	JPH::Quat travelTurnFrom = JPH::Quat::sIdentity();
+	JPH::Quat travelTurnTo = JPH::Quat::sIdentity();
+	float travelLength = 0.0f;
+	float travelled = 0.0f;
+	float travelSpeed = 0.0f;
 };
 
 struct Collision {
@@ -327,9 +338,11 @@ struct State {
 	IObjectsComponent* objects = nullptr;
 	IVehiclesComponent* vehicles = nullptr;
 	IActorsComponent* actors = nullptr;
+	ICustomModelsComponent* customModels = nullptr;
 	IPlayerPool* players = nullptr;
 	std::mt19937 random;
 	std::unordered_map<int, Model> models;
+	std::unordered_set<int> customWithoutCollision;
 	std::unordered_map<int, ModelSettings> modelSettings;
 	std::unordered_map<int, ModelSettings> modelValues;
 	std::vector<Placement> placements;
@@ -359,6 +372,7 @@ struct State {
 	std::vector<int> accelerated;
 	std::vector<int> rolling;
 	std::vector<int> floating;
+	std::vector<int> travelling;
 	std::vector<int> objectBodies;
 	std::vector<int> orphans;
 	bool restarted = false;
@@ -393,6 +407,7 @@ struct State {
 	std::mutex eventLock;
 	std::vector<Collision> collisions;
 	std::vector<Stop> stops;
+	std::vector<Stop> arrivals;
 	std::vector<Crossing> crossings;
 	double accumulator = 0.0;
 	double now = 0.0;
@@ -537,10 +552,19 @@ bool mapMatches(uint32_t placement, const Context& context);
 void forgetRemovals(AMX* amx);
 
 /**
+ * @brief      The collision of a model: from the database, or for a custom model of the server the
+ *             collision its model file holds, read the first time it is asked for.
+ *
+ * @return     - the model
+ *             - `nullptr` neither has it
+ */
+const Model* findModel(int modelid);
+
+/**
  * @brief      The shape a model collides with when it stands still.
  *
  * @return     - the shape
- *             - `nullptr` the model has no collision in the database
+ *             - `nullptr` the model has no collision
  */
 JPH::ShapeRefC staticShape(int modelid);
 
@@ -549,7 +573,7 @@ JPH::ShapeRefC staticShape(int modelid);
  *             `models.json` gives it, or a convex hull of its collision.
  *
  * @return     - the shape
- *             - `nullptr` the model has no collision in the database and no shape in `models.json`
+ *             - `nullptr` the model has no collision and no shape in `models.json`
  */
 JPH::ShapeRefC dynamicShape(int modelid);
 
@@ -625,6 +649,22 @@ void wakeAround(const JPH::BodyID& id);
  * @brief      Push a body by a constant acceleration on every step, or stop pushing it.
  */
 void setAcceleration(int index, JPH::Vec3Arg acceleration);
+
+/**
+ * @brief      Move a static object or zone in a straight line at a speed, turning it on the way so it
+ *             reaches `rotation` as it arrives, and carry what rests on it.
+ *
+ * @return     the milliseconds the move takes, `0` when it takes none and the body is there already
+ */
+cell travel(int index, JPH::RVec3Arg target, float speed, JPH::QuatArg rotation);
+
+/**
+ * @brief      End the move of a body where it is, as a static object again.
+ *
+ * @return     - `true` the body was moving
+ *             - `false` it was not
+ */
+bool stopTravel(int index);
 
 /**
  * @brief      Remove every body a script created.

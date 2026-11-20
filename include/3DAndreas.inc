@@ -8,8 +8,9 @@
  *
  * A physics object is a body simulated by the component. A moving one shows as a global object
  * that the component creates and moves, or as a streamer object attached with
- * `A3D_AttachDynamicObject`. Static objects and zones never move and show nothing. Include this
- * file after streamer.inc for streamer objects.
+ * `A3D_AttachDynamicObject`. Static objects and zones show nothing and stay where they are put,
+ * unless `A3D_MoveObject` moves them like `MoveObject` does. Include this file after streamer.inc
+ * for streamer objects.
  *
  * A gamemode restart destroys every global object, so the moving objects of the scripts that stay
  * loaded get new ones, and `A3D_GetObjectID` may give another id after it. Every number given to
@@ -37,7 +38,9 @@
  * The map comes from `scriptfiles/3dandreas/world.db`, which the `phydb` tool builds from the
  * files of the game: the collision of every model with the surface of each part, the map objects
  * with their interiors, the water, the surfaces and how the game moves the objects that can be
- * knocked over. A ColAndreas database still loads, without surfaces, water and that data.
+ * knocked over. A ColAndreas database still loads, without surfaces, water and that data. A custom
+ * model added with `AddSimpleModel` collides with the collision its .dff file holds, as the client
+ * does, read the first time a native asks for that model.
  *
  * `scriptfiles/3dandreas/models.json` describes models as `A3D_CreateObject` makes them: a sphere,
  * a box or a cylinder in place of the collision, which gives a shape to models the game leaves
@@ -670,14 +673,49 @@ native bool:A3D_SetBuoyancy(Physic:physicid, Float:buoyancy, Float:drag = 1.0);
 native bool:A3D_SetSyncError(Physic:physicid, Float:error);
 
 /**
- * @brief      Whether a moving physics object is awake.
+ * @brief      Whether a moving physics object is awake, or a static object or zone is on the way of
+ *             `A3D_MoveObject`.
  *
  * @param      physicid  Physics object to check.
  *
  * @return     - `true` it moves
- *             - `false` it rests, or `physicid` is not a moving physics object
+ *             - `false` it rests, or `physicid` is not a physics object
  */
 native bool:A3D_IsMoving(Physic:physicid);
+
+/**
+ * @brief      Move a static object or zone in a straight line at a speed, as `MoveObject` moves an
+ *             object, turning it on the way so it reaches the rotation as it arrives.
+ *
+ * It moves as a kinematic body: what rests on it rides along and what stands in its way is pushed,
+ * and nothing stops it. Pair it with `MoveObject` or `MoveDynamicObject` and the same speed to give
+ * a gate or a lift its collision. `A3D_SetPosition` and `A3D_SetRotation` end the move where the
+ * body is. `A3D_OnMoved` is called when it arrives.
+ *
+ * @param      physicid  Static object or zone to move.
+ * @param      x         Position to move to on the X axis.
+ * @param      y         Position to move to on the Y axis.
+ * @param      z         Position to move to on the Z axis.
+ * @param      speed     Speed in metres per second.
+ * @param      rx        Rotation to reach on the X axis, or `-1000.0` to keep it.
+ * @param      ry        Rotation to reach on the Y axis, or `-1000.0` to keep it.
+ * @param      rz        Rotation to reach on the Z axis, or `-1000.0` to keep it.
+ *
+ * @return     - the milliseconds the move takes
+ *             - `0` the body is there already and takes the rotation at once, or `physicid` is not a
+ *               static object or zone, or the speed is not above zero
+ */
+native A3D_MoveObject(Physic:physicid, Float:x, Float:y, Float:z, Float:speed, Float:rx = -1000.0, Float:ry = -1000.0, Float:rz = -1000.0);
+
+/**
+ * @brief      End the move `A3D_MoveObject` gave a static object or zone, where it is now.
+ *
+ * @param      physicid  Static object or zone to stop.
+ *
+ * @return     - `true` it was moving
+ *             - `false` it was not
+ */
+native bool:A3D_StopObject(Physic:physicid);
 
 /**
  * @brief      The global object that shows a physics object.
@@ -1325,6 +1363,8 @@ native A3D_GetActorsOnScreen(playerid, actors[], size = sizeof (actors), bool:si
  * A removal may hold for one virtual world only. Physics objects resting on a removed map object
  * wake up and fall. A removal lasts while the script that made it is loaded. When that script
  * unloads, as a gamemode does on a restart, the map objects no other script removed come back.
+ * The map objects a car can knock over, the models `A3D_GetModelPhysics` knows, stay standing
+ * here when a player's game knocks one over; removing those models takes them out for good.
  *
  * @param      modelid     Model to remove, or `-1` for every model.
  * @param      x           Centre on the X axis.
@@ -1393,7 +1433,9 @@ native bool:A3D_IsPointInWater(Float:x, Float:y, Float:z, &Float:depth = 0.0, wo
 /**
  * @brief      Find the box that holds a model, around its position.
  *
- * Models without collision, such as plants, still have the box the game gives them.
+ * Models without collision, such as plants, still have the box the game gives them. With a
+ * rotation, it is the box that holds that box turned, the space the model takes as an object
+ * placed with that rotation: `minZ` is how far its box reaches under its position.
  *
  * @param      modelid  Model to read.
  * @param      minX     Lowest corner on the X axis.
@@ -1402,11 +1444,14 @@ native bool:A3D_IsPointInWater(Float:x, Float:y, Float:z, &Float:depth = 0.0, wo
  * @param      maxX     Highest corner on the X axis.
  * @param      maxY     Highest corner on the Y axis.
  * @param      maxZ     Highest corner on the Z axis.
+ * @param      rx       Rotation of the model on the X axis.
+ * @param      ry       Rotation of the model on the Y axis.
+ * @param      rz       Rotation of the model on the Z axis.
  *
  * @return     - `true` the box was written
- *             - `false` the database does not know the model
+ *             - `false` the database does not know the model, or the rotation is not finite
  */
-native bool:A3D_GetModelBoundingBox(modelid, &Float:minX, &Float:minY, &Float:minZ, &Float:maxX, &Float:maxY, &Float:maxZ);
+native bool:A3D_GetModelBoundingBox(modelid, &Float:minX, &Float:minY, &Float:minZ, &Float:maxX, &Float:maxY, &Float:maxZ, Float:rx = 0.0, Float:ry = 0.0, Float:rz = 0.0);
 
 /**
  * @brief      Find the sphere that holds a model, around its position.
@@ -2080,6 +2125,13 @@ forward A3D_OnCollided(Physic:physicid, A3D_HIT:type, hitid, Float:x, Float:y, F
  * @param      z         Position on the Z axis.
  */
 forward A3D_OnStopped(Physic:physicid, Float:x, Float:y, Float:z);
+
+/**
+ * @brief      A static object or zone reached the end of the move `A3D_MoveObject` gave it.
+ *
+ * @param      physicid  Static object or zone that arrived.
+ */
+forward A3D_OnMoved(Physic:physicid);
 
 /**
  * @brief      A moving physics object entered a zone.
