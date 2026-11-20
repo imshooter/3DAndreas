@@ -116,6 +116,12 @@ constexpr uint32_t MapGroup = 0x80000000u;
 constexpr int ExtraSlots = 8;
 
 /**
+ * @brief      The bit of a slot that makes it a key of a script's own, `A3D_EXTRA_KEY` in the include,
+ *             kept in a list made with the first key a body holds.
+ */
+constexpr cell ExtraKeyFlag = 0x40000000;
+
+/**
  * @brief      How the object that players see follows a body.
  */
 enum class Sync {
@@ -183,6 +189,7 @@ struct Body {
 	float buoyancy = 0.0f;
 	float drag = 1.0f;
 	std::array<cell, ExtraSlots> extra = {};
+	std::unique_ptr<std::vector<std::pair<cell, cell>>> keyed;
 	JPH::RVec3 travelFrom = JPH::RVec3::sZero();
 	JPH::RVec3 travelTo = JPH::RVec3::sZero();
 	JPH::Quat travelTurnFrom = JPH::Quat::sIdentity();

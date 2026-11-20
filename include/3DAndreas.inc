@@ -100,6 +100,13 @@ enum A3D_COLLIDE (<<= 1) {
 
 #define A3D_COLLIDE_ALL                 (A3D_COLLIDE_MAP | A3D_COLLIDE_OBJECTS | A3D_COLLIDE_STATIC | A3D_COLLIDE_PLAYERS | A3D_COLLIDE_VEHICLES | A3D_COLLIDE_ACTORS)
 
+/**
+ * A slot of the extra numbers that is a key of its own, such as the three
+ * letters of a library, so libraries keep their numbers on the same physics
+ * object without taking each other's slots, like `E_STREAMER_CUSTOM`.
+ */
+#define A3D_EXTRA_KEY(%0)               ((%0) | 0x40000000 & ~0x80000000)
+
 enum A3D_MATERIAL (<<= 1) {
     A3D_MATERIAL_SOFT_LANDING = 1,
     A3D_MATERIAL_SEE_THROUGH,
@@ -744,7 +751,7 @@ native bool:A3D_AttachDynamicObject(Physic:physicid, objectid);
  * @brief      Keep a number on a physics object, such as the item it stands for.
  *
  * @param      physicid  Physics object to change.
- * @param      slot      Slot of the number, from `0` to `7`.
+ * @param      slot      Slot of the number, from `0` to `7`, or an `A3D_EXTRA_KEY`.
  * @param      value     Number to keep.
  *
  * @return     - `true` the number was kept
@@ -756,12 +763,33 @@ native bool:A3D_SetExtra(Physic:physicid, slot, value);
  * @brief      Read a number kept on a physics object with `A3D_SetExtra`.
  *
  * @param      physicid  Physics object to read.
- * @param      slot      Slot of the number, from `0` to `7`.
+ * @param      slot      Slot of the number, from `0` to `7`, or an `A3D_EXTRA_KEY`.
  *
  * @return     - the number, `0` when none was kept
  *             - `0` `physicid` is not a physics object, or `slot` is out of range
  */
 native A3D_GetExtra(Physic:physicid, slot);
+
+/**
+ * @brief      Whether a physics object keeps a number in a slot: always for
+ *             the slots `0` to `7`, and for a key once it was set.
+ *
+ * @param      physicid  Physics object to read.
+ * @param      slot      Slot of the number, from `0` to `7`, or an `A3D_EXTRA_KEY`.
+ */
+native bool:A3D_HasExtra(Physic:physicid, slot);
+
+/**
+ * @brief      Forget a number kept on a physics object: a key goes, and a slot
+ *             from `0` to `7` goes back to `0`.
+ *
+ * @param      physicid  Physics object to change.
+ * @param      slot      Slot of the number, from `0` to `7`, or an `A3D_EXTRA_KEY`.
+ *
+ * @return     - `true` it was forgotten
+ *             - `false` `physicid` is not a physics object, or it kept no such key
+ */
+native bool:A3D_RemoveExtra(Physic:physicid, slot);
 
 /**
  * @brief      What the component has done since the server started.

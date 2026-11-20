@@ -13,7 +13,7 @@ Physics objects moved by 3DAndreas, recorded in the game on an open.mp server. T
 
 ## Features
 
-- **Physics objects.** Spheres, boxes and objects shaped like a model fall, roll, bounce, float and push each other. Players see them as objects the component moves, with at most `max_updates` updates a second, so even a rain of hundreds of objects never floods a client. Static objects and zones make walls, tables and goals, and `A3D_MoveObject` moves them the way `MoveObject` moves an object, carrying what rests on them, for gates and lifts.
+- **Physics objects.** Spheres, boxes and objects shaped like a model fall, roll, bounce, float and push each other. Players see them as objects the component moves, with at most `max_updates` updates a second, so even a rain of hundreds of objects never floods a client. Static objects and zones make walls, tables and goals, and `A3D_MoveObject` moves them the way `MoveObject` moves an object, carrying what rests on them, for gates and lifts. Each object keeps eight numbers for scripts, and as many more under keys of their own, so several scripts tell their objects apart without sharing slots.
 - **Model settings.** `models.json` gives the shape, mass, friction, bounce and more to 203 models, from balls to weapons, so `A3D_CreateObject(1946, x, y, z)` makes a basketball that bounces like one. Every other model gets a mass from its volume and a friction and bounce from what its collision is made of.
 - **World queries.** Rays give the point, the normal, the model and the surface of the game they hit. There are rays that return every hit, line of sight, ground height, sphere sweeps and the overlaps of a sphere, a box or a model.
 - **Worlds and interiors.** Bodies and queries belong to a virtual world and an interior, so two houses built on the same interior never touch. Players and vehicles follow theirs, the map keeps the interior of each of its pieces, and `A3D_SetInterior` moves a body to another one. The `interiorid` of every native is optional and `-1` means every interior, so older scripts work as before.
@@ -286,6 +286,7 @@ The scripts in [`tests`](tests) run as the main script, print what they check an
 | [`parked.pwn`](tests/parked.pwn) | The time a thousand parked vehicles cost. |
 | [`database.pwn`](tests/database.pwn) | The surface of hits, water and floating objects, model data and the names and flags of surfaces. |
 | [`buildings.pwn`](tests/buildings.pwn) | Building removal for every world and for one, model overlaps, extra data, rotations and reflections. |
+| [`extras.pwn`](tests/extras.pwn) | The extra numbers of physics objects: the eight slots, the keys of `A3D_EXTRA_KEY`, what an object keeps after another key goes or its id comes back, and the cost of a key next to a slot. |
 | [`probes.pwn`](tests/probes.pwn) | Actors, sight in searches, points inside the map, free spots, throws, offsets, vehicle parts and the screen. |
 | [`stress.pwn`](tests/stress.pwn) | Four load scenarios, picked with `PHYBENCH_SCENARIO=1` to `4` and sized with `PHYBENCH_COUNT` on the pawncc command line. |
 | [`colandreas.pwn`](tests/colandreas.pwn) | The comparison above. Compiled with `BENCH_COLANDREAS` defined, it runs the same queries on ColAndreas. |

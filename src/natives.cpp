@@ -506,21 +506,89 @@ cell AMX_NATIVE_CALL A3D_AttachDynamicObject(AMX* amx, const cell* params) {
 	return true;
 }
 
+cell* findKeyed(Body& body, cell slot) {
+	if (!body.keyed) {
+		return nullptr;
+	}
+	for (auto& entry : *body.keyed) {
+		if (entry.first == slot) {
+			return &entry.second;
+		}
+	}
+	return nullptr;
+}
+
+bool isSlot(cell slot) {
+	return slot >= 0 && slot < ExtraSlots;
+}
+
+bool isKey(cell slot) {
+	return (slot & ExtraKeyFlag) != 0 && slot > 0;
+}
+
 cell AMX_NATIVE_CALL A3D_SetExtra(AMX* amx, const cell* params) {
 	Body* body = findBody(params[1]);
-	if (body == nullptr || params[2] < 0 || params[2] >= ExtraSlots) {
+	if (body == nullptr) {
 		return false;
 	}
-	body->extra[size_t(params[2])] = params[3];
+	if (isSlot(params[2])) {
+		body->extra[size_t(params[2])] = params[3];
+		return true;
+	}
+	if (!isKey(params[2])) {
+		return false;
+	}
+	cell* value = findKeyed(*body, params[2]);
+	if (value != nullptr) {
+		*value = params[3];
+		return true;
+	}
+	if (!body->keyed) {
+		body->keyed.reset(new std::vector<std::pair<cell, cell>>());
+	}
+	body->keyed->emplace_back(params[2], params[3]);
 	return true;
 }
 
 cell AMX_NATIVE_CALL A3D_GetExtra(AMX* amx, const cell* params) {
 	Body* body = findBody(params[1]);
-	if (body == nullptr || params[2] < 0 || params[2] >= ExtraSlots) {
+	if (body == nullptr) {
 		return 0;
 	}
-	return body->extra[size_t(params[2])];
+	if (isSlot(params[2])) {
+		return body->extra[size_t(params[2])];
+	}
+	cell* value = isKey(params[2]) ? findKeyed(*body, params[2]) : nullptr;
+	return value != nullptr ? *value : 0;
+}
+
+cell AMX_NATIVE_CALL A3D_HasExtra(AMX* amx, const cell* params) {
+	Body* body = findBody(params[1]);
+	if (body == nullptr) {
+		return false;
+	}
+	return isSlot(params[2]) || (isKey(params[2]) && findKeyed(*body, params[2]) != nullptr);
+}
+
+cell AMX_NATIVE_CALL A3D_RemoveExtra(AMX* amx, const cell* params) {
+	Body* body = findBody(params[1]);
+	if (body == nullptr) {
+		return false;
+	}
+	if (isSlot(params[2])) {
+		body->extra[size_t(params[2])] = 0;
+		return true;
+	}
+	if (!isKey(params[2]) || !body->keyed) {
+		return false;
+	}
+	for (auto entry = body->keyed->begin(); entry != body->keyed->end(); ++entry) {
+		if (entry->first == params[2]) {
+			body->keyed->erase(entry);
+			return true;
+		}
+	}
+	return false;
 }
 
 cell AMX_NATIVE_CALL A3D_GetStats(AMX* amx, const cell* params) {
@@ -582,6 +650,8 @@ const AMX_NATIVE_INFO natives[] = {
 	{ "A3D_AttachDynamicObject", A3D_AttachDynamicObject },
 	{ "A3D_SetExtra", A3D_SetExtra },
 	{ "A3D_GetExtra", A3D_GetExtra },
+	{ "A3D_HasExtra", A3D_HasExtra },
+	{ "A3D_RemoveExtra", A3D_RemoveExtra },
 	{ "A3D_GetStats", A3D_GetStats },
 };
 
