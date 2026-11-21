@@ -7,8 +7,8 @@
  * object, and the cost of a key next to a slot.
  */
 
-#define KEY_A (A3D_EXTRA_KEY(0x616161))
-#define KEY_B (A3D_EXTRA_KEY(0x626262))
+#define KEY_A A3D_EXTRA_KEY(0x616161)
+#define KEY_B A3D_EXTRA_KEY(0x626262)
 #define N (1000000)
 
 static
