@@ -1,5 +1,7 @@
 # 3DAndreas
 
+[![release](https://img.shields.io/github/v/release/imshooter/3DAndreas)](https://github.com/imshooter/3DAndreas/releases/latest) [![Build](https://img.shields.io/github/actions/workflow/status/imshooter/3DAndreas/main.yml?branch=main&label=Build&logo=github)](https://github.com/imshooter/3DAndreas/actions/workflows/main.yml)
+
 > [!NOTE]
 > 3DAndreas is experimental and already runs in production. Its natives may still change from one version to the next. It was made with Claude Opus 5.5, a model by [Anthropic](https://www.anthropic.com), and Astra, a model by [OpenAI](https://openai.com).
 
