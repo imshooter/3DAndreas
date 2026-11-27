@@ -666,6 +666,7 @@ void registerNatives(IPawnScript& script) {
 	registerScreenNatives(script);
 	registerRouteNatives(script);
 	registerWalkNatives(script);
+	registerDiscNatives(script);
 }
 
 }

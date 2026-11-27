@@ -160,6 +160,15 @@ enum A3D_PART {
 
 #define INVALID_ROUTE_ID                (Route:-1)
 
+#define INVALID_DISC_TABLE_ID           (DiscTable:-1)
+
+enum A3D_DISC_STEP {
+    A3D_DISC_STEP_MOVE,
+    A3D_DISC_STEP_DISC,
+    A3D_DISC_STEP_WALL,
+    A3D_DISC_STEP_POCKET
+};
+
 enum A3D_ROUTE {
     A3D_ROUTE_FASTEST,
     A3D_ROUTE_SHORTEST,
@@ -2020,6 +2029,204 @@ native Route:A3D_GetPlayerRoute(playerid);
  * @brief      Whether the navigation mesh was read. A call made while the server starts waits for it.
  */
 native bool:A3D_IsWalkMeshLoaded();
+
+/**
+ * @brief      Create a table of discs: circles that slide on a plane and knock
+ *             each other, the walls and the pockets of the table, as pool balls
+ *             seen from above, pucks or curling stones.
+ *
+ * A table has its own coordinates and is not part of the physics world. A run
+ * moves one disc and works out at once every contact until all of them stop,
+ * as steps that a script plays back with moves of objects. A moving disc goes
+ * in a straight line at one speed until the next step, and every `step` seconds
+ * its speed drops by `rolling + damping * speed` times `step`. The discs weigh
+ * the same. The table lasts until `A3D_DestroyDiscTable`, or until the script
+ * that made it unloads.
+ *
+ * @param      rolling  Speed lost every second whatever the speed, in m/s.
+ * @param      damping  Share of the speed lost every second.
+ * @param      stop     Speed below which a disc stops, in m/s.
+ * @param      step     Seconds between two drops of speed.
+ *
+ * @return     - the table
+ *             - `INVALID_DISC_TABLE_ID` a value is negative or not a number, or
+ *               `step` is not above `0.0`
+ */
+native DiscTable:A3D_CreateDiscTable(Float:rolling = 0.05, Float:damping = 0.3, Float:stop = 0.01, Float:step = 0.1);
+
+/**
+ * @brief      Destroy a table of discs with its walls, pockets, discs and steps.
+ *
+ * @param      tableid  The table.
+ *
+ * @return     - `true` the table was destroyed
+ *             - `false` the table does not exist
+ */
+native bool:A3D_DestroyDiscTable(DiscTable:tableid);
+
+/**
+ * @brief      Whether a table of discs exists.
+ *
+ * @param      tableid  The table.
+ *
+ * @return     - `true` the table exists
+ *             - `false` the table does not exist
+ */
+native bool:A3D_IsValidDiscTable(DiscTable:tableid);
+
+/**
+ * @brief      Add a wall from one point to another. Discs bounce off both of
+ *             its sides and off its ends.
+ *
+ * @param      tableid  The table.
+ * @param      fromX    One end, on the X axis of the table.
+ * @param      fromY    One end, on the Y axis.
+ * @param      toX      The other end, on the X axis.
+ * @param      toY      The other end, on the Y axis.
+ * @param      bounce   Share of the speed into the wall that comes back.
+ * @param      keep     Share of the speed along the wall that is kept.
+ *
+ * @return     - the index of the wall, counted from `0`
+ *             - `-1` the table does not exist or a value is not a number
+ */
+native A3D_AddDiscWall(DiscTable:tableid, Float:fromX, Float:fromY, Float:toX, Float:toY, Float:bounce = 0.8, Float:keep = 0.95);
+
+/**
+ * @brief      Add a pocket. A disc whose edge comes within `radius` of its
+ *             centre falls in and leaves the table.
+ *
+ * @param      tableid  The table.
+ * @param      x        The centre, on the X axis of the table.
+ * @param      y        The centre, on the Y axis.
+ * @param      radius   How near the centre the edge of a disc falls in.
+ *
+ * @return     - the index of the pocket, counted from `0`
+ *             - `-1` the table does not exist, a value is not a number or the
+ *               radius is negative
+ */
+native A3D_AddDiscPocket(DiscTable:tableid, Float:x, Float:y, Float:radius);
+
+/**
+ * @brief      Add a disc on the table.
+ *
+ * @param      tableid  The table.
+ * @param      x        Its centre, on the X axis of the table.
+ * @param      y        Its centre, on the Y axis.
+ * @param      radius   Its radius.
+ * @param      bounce   Share of the speed of a knock that comes back, averaged
+ *                      with the other disc's.
+ *
+ * @return     - the index of the disc, counted from `0`
+ *             - `-1` the table does not exist, a value is not a number or the
+ *               radius is not above `0.0`
+ */
+native A3D_AddDisc(DiscTable:tableid, Float:x, Float:y, Float:radius, Float:bounce = 0.95);
+
+/**
+ * @brief      Place a disc. A run leaves every disc where it stopped.
+ *
+ * @param      tableid  The table.
+ * @param      disc     The disc.
+ * @param      x        Its centre, on the X axis of the table.
+ * @param      y        Its centre, on the Y axis.
+ *
+ * @return     - `true` the disc was placed
+ *             - `false` the table or the disc does not exist, or a value is not
+ *               a number
+ */
+native bool:A3D_SetDiscPosition(DiscTable:tableid, disc, Float:x, Float:y);
+
+/**
+ * @brief      Where a disc is, or where it fell in.
+ *
+ * @param      tableid  The table.
+ * @param      disc     The disc.
+ * @param      x        Its centre, on the X axis of the table.
+ * @param      y        Its centre, on the Y axis.
+ *
+ * @return     - `true` the disc exists
+ *             - `false` the table or the disc does not exist
+ */
+native bool:A3D_GetDiscPosition(DiscTable:tableid, disc, &Float:x, &Float:y);
+
+/**
+ * @brief      Put a disc back on the table or take it off. A run takes off
+ *             the discs that fall in a pocket.
+ *
+ * @param      tableid  The table.
+ * @param      disc     The disc.
+ * @param      onTable  Whether it is on the table.
+ *
+ * @return     - `true` the disc exists
+ *             - `false` the table or the disc does not exist
+ */
+native bool:A3D_SetDiscOnTable(DiscTable:tableid, disc, bool:onTable);
+
+/**
+ * @brief      Whether a disc is on the table.
+ *
+ * @param      tableid  The table.
+ * @param      disc     The disc.
+ *
+ * @return     - `true` the disc is on the table
+ *             - `false` it is off the table, or the table or the disc does not
+ *               exist
+ */
+native bool:A3D_IsDiscOnTable(DiscTable:tableid, disc);
+
+/**
+ * @brief      Set a disc moving and work out every step until all discs stop,
+ *             replacing the steps of the last run.
+ *
+ * Steps come in the order of their time. Each disc that moves has a first
+ * step where it starts and one more wherever its speed changes: a drop of
+ * speed, a knock, a wall or a pocket. Contacts are exact between drops of
+ * speed.
+ *
+ * @param      tableid    The table.
+ * @param      disc       The disc set moving.
+ * @param      velocityX  Its speed on the X axis, in m/s.
+ * @param      velocityY  Its speed on the Y axis, in m/s.
+ * @param      limit      Seconds after which every disc is stopped.
+ * @param      steps      Most steps kept. The run stops every disc when it
+ *                        nears them.
+ *
+ * @return     - the number of steps
+ *             - `0` the table or the disc does not exist, the disc is off the
+ *               table, a value is not a number, `limit` is not above `0.0` or
+ *               `steps` is under four for each disc
+ */
+native A3D_RunDiscTable(DiscTable:tableid, disc, Float:velocityX, Float:velocityY, Float:limit = 20.0, steps = 4096);
+
+/**
+ * @brief      The number of steps of the last run.
+ *
+ * @param      tableid  The table.
+ *
+ * @return     - the number of steps
+ *             - `0` there was no run, or the table does not exist
+ */
+native A3D_GetDiscStepCount(DiscTable:tableid);
+
+/**
+ * @brief      A step of the last run.
+ *
+ * @param      tableid  The table.
+ * @param      step     The step, counted from `0`.
+ * @param      disc     Disc of the step.
+ * @param      kind     What happened.
+ * @param      time     Milliseconds after the start of the run.
+ * @param      x        Where the disc is, on the X axis.
+ * @param      y        Where the disc is, on the Y axis.
+ * @param      next     The next step of the same disc, which it reaches in a
+ *                      straight line at one speed, or `-1` when it stops here.
+ * @param      other    The other disc of a knock, the wall or the pocket, or `-1`.
+ * @param      speed    Speed of a knock or into a wall, in m/s.
+ *
+ * @return     - `true` the step exists
+ *             - `false` the table or the step does not exist
+ */
+native bool:A3D_GetDiscStep(DiscTable:tableid, step, &disc, &A3D_DISC_STEP:kind, &time, &Float:x, &Float:y, &next, &other, &Float:speed);
 
 /**
  * @brief      Find the nearest point of the navigation mesh, where a pedestrian can stand.

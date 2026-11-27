@@ -966,6 +966,21 @@ void registerRouteNatives(IPawnScript& script);
  */
 void registerWalkNatives(IPawnScript& script);
 
+/**
+ * @brief      Register the natives that work out the moves of discs on a table.
+ */
+void registerDiscNatives(IPawnScript& script);
+
+/**
+ * @brief      Destroy every table of discs a script made.
+ */
+void forgetDiscs(AMX* amx);
+
+/**
+ * @brief      Destroy every table of discs.
+ */
+void stopDiscs();
+
 float readFloat(const cell* params, int index);
 
 /**

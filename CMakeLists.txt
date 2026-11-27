@@ -75,6 +75,7 @@ add_library(3DAndreas SHARED
     src/actors.cpp
     src/bodies.cpp
     src/database.cpp
+    src/discs.cpp
     src/geometry.cpp
     src/main.cpp
     src/map.cpp

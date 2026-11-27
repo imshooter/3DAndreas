@@ -174,6 +174,7 @@ public:
 		State& s = state();
 		forgetScript(script.GetAMX());
 		forgetRoutes(script.GetAMX());
+		forgetDiscs(script.GetAMX());
 		forgetRemovals(script.GetAMX());
 		s.scripts.erase(script.GetAMX());
 	}
@@ -334,6 +335,7 @@ public:
 			removePlayer(playerid);
 		}
 		stopRoutes();
+		stopDiscs();
 		stopWorld();
 		delete this;
 	}

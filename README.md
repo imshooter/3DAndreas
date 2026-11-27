@@ -26,6 +26,7 @@ Physics objects moved by 3DAndreas, recorded in the game on an open.mp server. T
 - **Routes.** The fastest or shortest way by road, keeping to the one way streets of the game, or driving them both ways for the emergency services, on the roads the traffic drives, by boat and on foot. Each route is found in some tens of microseconds by contraction hierarchies, pays for its turns, and gives its points, turn by turn directions and the progress of a player along it. One search finds the nearest of many places by road.
 - **A GPS line.** A route shows on the radar and the map of a player as a line that moves on as they go, whole when it fits, drawn with gang zones sent straight to their client. The script hears when they arrive, stray, or come nearer the next turn.
 - **Walking anywhere.** An optional navigation mesh of the whole map, built with [Recast](https://github.com/recastnavigation/recastnavigation), tells where a pedestrian can walk: walks from a yard to a door, random spots that can be walked to, and whether a straight walk is clear.
+- **Tables of discs.** Circles that slide on a plane and knock each other, the walls and the pockets of a table, worked out at once for a whole shot of pool, a puck or a curling stone, as steps a script plays back with moves of objects.
 
 ## Compared with ColAndreas
 
@@ -296,6 +297,7 @@ The scripts in [`tests`](tests) run as the main script, print what they check an
 | [`walks.pwn`](tests/walks.pwn) | The navigation mesh: walk points, random points, straight walks and walks. Needs `navmesh.db`. |
 | [`issues.pwn`](tests/issues.pwn) | The cases reported against ColAndreas: water above dry ground, the open sea, ground under an object at 1687 metres, removals of every model, the box of a turned model and ids that do not exist. |
 | [`moving.pwn`](tests/moving.pwn) | `A3D_MoveObject`: a platform that rises with a crate on it, arrives, turns, stops, and a zone moved over a resting crate. |
+| [`discs.pwn`](tests/discs.pwn) | Tables of discs: a knock, a wall and its end, a pocket, a disc slowed to a stop, a run cut at its steps, values that are refused, and the tables of a gamemode gone after a restart. |
 | [`custom.pwn`](tests/custom.pwn) | The collision of custom models from their .dff files, a file without one, and a model asked for before it is added. Needs the model files named at its top in the models folder. |
 | [`compare.pwn`](tests/compare.pwn) | The comparison of routes above. Needs samp-gps-plugin with its `GPS.dat`, and its `INVALID_PATH_ID` renamed, as it clashes with open.mp. |
 
