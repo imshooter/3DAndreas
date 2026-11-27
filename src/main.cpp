@@ -269,6 +269,35 @@ public:
 		return count;
 	}
 
+	int castRayAll(Vector3 from, Vector3 to, int world, int interior, uint32_t flags, A3D::RayHit* hits, int size) override {
+		if (hits == nullptr || size <= 0) {
+			return 0;
+		}
+		std::vector<QueryHit> found(static_cast<size_t>(size));
+		int count = physics::castRayAll(from, to, world, flags, interior, true, found.data(), size);
+		for (int index = 0; index != count; ++index) {
+			const QueryHit& hit = found[size_t(index)];
+			hits[index].point = toPoint(hit.point);
+			hits[index].normal = Vector3(hit.normal.GetX(), hit.normal.GetY(), hit.normal.GetZ());
+			hits[index].type = int(hit.type);
+			hits[index].id = hit.id;
+			hits[index].material = hit.material;
+		}
+		return count;
+	}
+
+	uint32_t getMaterialFlags(int material) override {
+		return materialFlags(material);
+	}
+
+	bool hasModelPhysics(int model) override {
+		return modelMoves(model);
+	}
+
+	bool isPointInsideMap(Vector3 point, int world, int interior, float& depth) override {
+		return insideMap(point, world, interior, depth);
+	}
+
 	void reset() override {
 		state().restarted = true;
 	}

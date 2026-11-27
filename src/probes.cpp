@@ -65,24 +65,11 @@ bool inSolidPart(Vector3 point, int world, int interior) {
 }
 
 cell AMX_NATIVE_CALL A3D_IsPointInsideMap(AMX* amx, const cell* params) {
-	Vector3 point = readVector(params, 1);
-	int world = params[5];
-	int interior = optional(params, 6, -1);
-	if (inSolidPart(point, world, interior)) {
-		writeFloat(amx, params[4], 0.0f);
-		return true;
-	}
-	bool behind = false;
-	float above = 0.0f;
-	if (!firstSurface(point, ProbeReach, world, interior, behind, above) || !behind) {
+	float depth = 0.0f;
+	if (!insideMap(readVector(params, 1), params[5], optional(params, 6, -1), depth)) {
 		return false;
 	}
-	bool under = false;
-	float below = 0.0f;
-	if (firstSurface(point, -ProbeReach, world, interior, under, below) && !under) {
-		return false;
-	}
-	writeFloat(amx, params[4], above);
+	writeFloat(amx, params[4], depth);
 	return true;
 }
 
@@ -172,6 +159,28 @@ const AMX_NATIVE_INFO natives[] = {
 	{ "A3D_PredictTrajectory", A3D_PredictTrajectory },
 };
 
+}
+
+bool insideMap(Vector3 point, int world, int interior, float& depth) {
+	if (state().system == nullptr) {
+		return false;
+	}
+	if (inSolidPart(point, world, interior)) {
+		depth = 0.0f;
+		return true;
+	}
+	bool behind = false;
+	float above = 0.0f;
+	if (!firstSurface(point, ProbeReach, world, interior, behind, above) || !behind) {
+		return false;
+	}
+	bool under = false;
+	float below = 0.0f;
+	if (firstSurface(point, -ProbeReach, world, interior, under, below) && !under) {
+		return false;
+	}
+	depth = above;
+	return true;
 }
 
 void registerProbeNatives(IPawnScript& script) {

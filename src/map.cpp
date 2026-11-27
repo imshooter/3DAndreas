@@ -222,6 +222,16 @@ const AMX_NATIVE_INFO natives[] = {
 
 }
 
+uint32_t materialFlags(int material) {
+	const Surface* surface = surfaceAt(material);
+	return surface == nullptr ? 0 : uint32_t(surface->flags);
+}
+
+bool modelMoves(int modelid) {
+	const Model* model = findModel(modelid);
+	return model != nullptr && (model->flags & ModelDynamic) != 0;
+}
+
 bool mapHidden(uint32_t placement, int world) {
 	State& s = state();
 	if (world < 0 || placement >= s.placementHidden.size() || s.placementHidden[placement] == 0) {

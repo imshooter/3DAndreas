@@ -352,41 +352,19 @@ cell AMX_NATIVE_CALL A3D_RayCastNormal(AMX* amx, const cell* params) {
 }
 
 cell AMX_NATIVE_CALL A3D_RayCastAll(AMX* amx, const cell* params) {
-	State& s = state();
-	Vector3 from = readVector(params, 1);
-	Vector3 to = readVector(params, 4);
-	JPH::Vec3 direction(to.x - from.x, to.y - from.y, to.z - from.z);
 	cell* xs = addressOf(amx, params[7]);
 	cell* ys = addressOf(amx, params[8]);
 	cell* zs = addressOf(amx, params[9]);
 	cell* types = addressOf(amx, params[10]);
 	cell* ids = addressOf(amx, params[11]);
 	cell* materials = addressOf(amx, params[12]);
-	if (direction.IsNearZero() || xs == nullptr || ys == nullptr || zs == nullptr || types == nullptr || ids == nullptr || materials == nullptr) {
+	if (xs == nullptr || ys == nullptr || zs == nullptr || types == nullptr || ids == nullptr || materials == nullptr || params[13] <= 0) {
 		return 0;
 	}
-	JPH::RRayCast ray(toJoltPoint(from), direction);
-	JPH::AllHitCollisionCollector<JPH::CastRayCollector> collector;
-	QueryFilter filter(params[14], uint32_t(params[15]), optional(params, 16, -1));
-	s.system->GetNarrowPhaseQuery().CastRay(ray, raySettings(), collector, {}, {}, filter);
-	collector.Sort();
-	float water;
-	bool wet = (uint32_t(params[15]) & CollideWater) != 0 && waterAlong(from, to, water);
-	cell found = cell(collector.mHits.size()) + (wet ? 1 : 0);
-	cell count = std::min(found, std::max(params[13], cell(0)));
-	size_t next = 0;
-	for (cell index = 0; index != count; ++index) {
-		QueryHit hit;
-		if (wet && (next == collector.mHits.size() || water < collector.mHits[next].mFraction)) {
-			hit.point = ray.GetPointOnRay(water);
-			hit.type = Hit::Water;
-			wet = false;
-		} else {
-			const JPH::RayCastResult& result = collector.mHits[next++];
-			hit.point = ray.GetPointOnRay(result.mFraction);
-			describe(result.mBodyID, hit);
-			inspect(result.mBodyID, result.mSubShapeID2, direction, false, hit);
-		}
+	std::vector<QueryHit> hits(static_cast<size_t>(params[13]));
+	int count = castRayAll(readVector(params, 1), readVector(params, 4), params[14], uint32_t(params[15]), optional(params, 16, -1), false, hits.data(), int(params[13]));
+	for (int index = 0; index != count; ++index) {
+		const QueryHit& hit = hits[size_t(index)];
 		xs[index] = floatCell(float(hit.point.GetX()));
 		ys[index] = floatCell(float(hit.point.GetY()));
 		zs[index] = floatCell(float(hit.point.GetZ()));
@@ -678,6 +656,40 @@ const AMX_NATIVE_INFO natives[] = {
 	{ "A3D_GetPlayerTarget", A3D_GetPlayerTarget },
 };
 
+}
+
+int castRayAll(Vector3 from, Vector3 to, int world, uint32_t flags, int interior, bool normal, QueryHit* hits, int size) {
+	State& s = state();
+	JPH::Vec3 direction(to.x - from.x, to.y - from.y, to.z - from.z);
+	if (s.system == nullptr || hits == nullptr || size <= 0 || direction.IsNearZero()) {
+		return 0;
+	}
+	JPH::RRayCast ray(toJoltPoint(from), direction);
+	JPH::AllHitCollisionCollector<JPH::CastRayCollector> collector;
+	QueryFilter filter(world, flags, interior);
+	s.system->GetNarrowPhaseQuery().CastRay(ray, raySettings(), collector, {}, {}, filter);
+	collector.Sort();
+	float water;
+	bool wet = (flags & CollideWater) != 0 && waterAlong(from, to, water);
+	int found = int(collector.mHits.size()) + (wet ? 1 : 0);
+	int count = std::min(found, size);
+	size_t next = 0;
+	for (int index = 0; index != count; ++index) {
+		QueryHit& hit = hits[index];
+		hit = QueryHit();
+		if (wet && (next == collector.mHits.size() || water < collector.mHits[next].mFraction)) {
+			hit.point = ray.GetPointOnRay(water);
+			hit.normal = direction.GetZ() > 0.0f ? -JPH::Vec3::sAxisZ() : JPH::Vec3::sAxisZ();
+			hit.type = Hit::Water;
+			wet = false;
+		} else {
+			const JPH::RayCastResult& result = collector.mHits[next++];
+			hit.point = ray.GetPointOnRay(result.mFraction);
+			describe(result.mBodyID, hit);
+			inspect(result.mBodyID, result.mSubShapeID2, direction, normal, hit);
+		}
+	}
+	return count;
 }
 
 void registerQueryNatives(IPawnScript& script) {

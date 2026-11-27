@@ -253,7 +253,7 @@ navbuild world.db navmesh.db --threads 4
 
 ## Other components
 
-Other open.mp components can check lines of sight, cast rays, find the ground and find walks on the navigation mesh in C++ through [`include/3DAndreas.hpp`](include/3DAndreas.hpp), with `components->queryComponent<A3D::IComponent3DAndreas>()`. The [Other components](https://github.com/imshooter/3DAndreas/wiki/Other-Components) page of the wiki tells more.
+Other open.mp components can check lines of sight, cast rays (the first hit or all of them), find the ground, tell whether a point is inside the map, read surface flags and moving models, and find walks on the navigation mesh in C++ through [`include/3DAndreas.hpp`](include/3DAndreas.hpp), with `components->queryComponent<A3D::IComponent3DAndreas>()`. The [Other components](https://github.com/imshooter/3DAndreas/wiki/Other-Components) page of the wiki tells more.
 
 ## Building
 
@@ -305,7 +305,7 @@ On Windows, `run-interiors.ps1` runs the interior tests in a new server in a tem
 ./tests/run-interiors.ps1 -ServerRoot C:/path/to/server -Library C:/path/to/build/Release/3DAndreas.dll
 ```
 
-`-ContactCache` runs them with the contact cache on, `-Test water`, `-Test wake` and `-Test finite` run those tests, `-Test restart -Side restart-side` runs the restart test with its side script, and `-Test interiors-legacy -LegacyInclude` runs the old natives against a server that still holds the include of 0.7.2. Water decides what is under it in the world of the query and every interior, so a pool high in a building does not flood the street under its floor. The C++ interface checks every interior.
+`-ContactCache` runs them with the contact cache on, `-Test water`, `-Test wake` and `-Test finite` run those tests, `-Test restart -Side restart-side` runs the restart test with its side script, and `-Test interiors-legacy -LegacyInclude` runs the old natives against a server that still holds the include of 0.7.2. Water decides what is under it in the world of the query and every interior, so a pool high in a building does not flood the street under its floor. The C++ interface checks every interior, except `castRayAll` and `isPointInsideMap`, which take one.
 
 From Git Bash, [`run.sh`](tests/run.sh) runs any test the same way, with the models folder of the server for `custom.pwn`, and [`compare.sh`](tests/compare.sh) runs tests on the installed and the fresh build and shows where their output differs:
 

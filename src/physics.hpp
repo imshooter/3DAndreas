@@ -862,6 +862,29 @@ bool castRay(Vector3 from, Vector3 to, int world, uint32_t flags, bool normal, Q
 bool blocked(Vector3 from, Vector3 to, int world, uint32_t flags, int interior = -1);
 
 /**
+ * @brief      Everything a segment hits, nearest first, the water too when `flags` has
+ *             `CollideWater`.
+ *
+ * @return     The hits written to `hits`, at most `size`
+ */
+int castRayAll(Vector3 from, Vector3 to, int world, uint32_t flags, int interior, bool normal, QueryHit* hits, int size);
+
+/**
+ * @brief      Whether a point lies inside the collision of the map, and how deep under its top.
+ */
+bool insideMap(Vector3 point, int world, int interior, float& depth);
+
+/**
+ * @brief      The flags of a surface of the game, as `A3D_MATERIAL` in the include.
+ */
+uint32_t materialFlags(int material);
+
+/**
+ * @brief      Whether a model of the map is one the game knocks over or opens.
+ */
+bool modelMoves(int modelid);
+
+/**
  * @brief      Where a sphere moved along a segment first touches something, as the centre of the
  *             sphere then.
  */
